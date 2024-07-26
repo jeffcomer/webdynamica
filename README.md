@@ -3,6 +3,8 @@ WebDynamica
 
 WebDynamica is a browser-based interactive molecular dynamics program using WebGL.
 
+[Try WebDynamica!](http://jeffcomer.us/webdynamica)
+
 The goal of WebDynamica is to help educate the public and students about molecular interactions, while being useful to experts in molecular simulation for prototyping and constructing initial conditions.
 
 It allows the user to manipulate molecules using the mouse or touchscreen, and runs in any web browser including Firefox, Chrome, and Safari, taking advantage of WebGL and graphics hardware to rapidly perform molecular calculations on devices from mobile phones to high-end desktops. 
