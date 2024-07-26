@@ -1434,7 +1434,7 @@
 	    if (validSelection()) {
 		// Show the deletion in the selection status
 		const selectStatus = document.getElementById('selectStatus');
-		selectStatus.innerHTML = `<span class="selectDelete">Deleting <b>${mouseInfo.moleculeName}</b> (fragment ${mouseInfo.fragment})</span>`;
+		selectStatus.innerHTML = `<span class="selectDelete">Deleting <b>${mouseInfo.moleculeName}</b><br>&nbsp;</span>`;
 		selectStatusTime = performance.now();
 		
 		// Get the newest positions
@@ -1606,10 +1606,11 @@
 	    const selectStatus = document.getElementById('selectStatus');
 	    if (mouseInfo.dragging) {
 		selectStatusTime = performance.now();
-		selectStatus.innerHTML = `<span class="selectDrag">Dragging fragment ${mouseInfo.fragment}</span><br>&nbsp;`;
+		selectStatus.innerHTML = `<span class="selectDrag">Dragging ${mouseInfo.moleculeName}</span><br>&nbsp;`;
 	    } else if (mouseInfo.fragment >= 0 && mouseInfo.material != MaterialEnum.background) {
 		selectStatusTime = performance.now();
-		selectStatus.innerHTML = `<span class="selectSelect">Selecting fragment ${mouseInfo.fragment}</span><br>&nbsp;`;
+		// selectStatus.innerHTML = `<span class="selectSelect">Selecting fragment ${mouseInfo.fragment}</span><br>&nbsp;`;
+		selectStatus.innerHTML = `<span class="selectSelect">Selecting ${mouseInfo.moleculeName}</span><br>&nbsp;`;
 	    } else {
 		// No selection action
 		// Leave the last update for a little bit
