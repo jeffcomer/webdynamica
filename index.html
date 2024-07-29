@@ -109,6 +109,10 @@
 	  color: #ffffc0;
       }
 
+      .buttonBig {
+	  font-size: 13px;
+      }
+
       h3 {
 	  font-size: 12px;
 	  text-align: center;
@@ -274,13 +278,15 @@
 
       <div id="statusBox2" class="element center">
 	<fieldset><legend>Insertion</legend>
-	  <canvas id="insertCanvas" class="canvas2d" width="80px" height="80px"></canvas>
-	  <p>To insert: <span id="insertName">None</span></p>
-	  <div>
+	  <canvas id="insertCanvas" class="canvas2d" width="80px" height="80px"></canvas><br>
+	  To insert: <span id="insertName">None</span>
+	  <p>
 	    <button id="buttonPrevious" onclick="window.pressPreviousMolecule()">Prev</button>
-	    <button id="buttonInsert" onclick="window.pressInsertMolecule()">Insert</button>
 	    <button id="buttonNext" onclick="window.pressNextMolecule()">Next</button>
-	  </div>
+	  </p>
+	  <p>
+	    <button id="buttonInsert" class="buttonBig" onclick="window.pressInsertMolecule()">Insert</button>
+	  </p>
 	</fieldset>
       </div>
 
