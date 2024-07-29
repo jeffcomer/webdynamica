@@ -1341,8 +1341,8 @@ class MoleculeThumbnail {
 	    ctx.stroke();
 	}
 
-	this.drawSphere(ctx, atom0, 0.3);
-	this.drawSphere(ctx, atom1, 0.3);
+	this.drawSphere(ctx, atom0, 0.25);
+	this.drawSphere(ctx, atom1, 0.25);
     }
     
     drawSphere(ctx, atom, radiusScale = 0.6) {
@@ -1351,8 +1351,8 @@ class MoleculeThumbnail {
 	const x = pix*atom.pos[0] + 0.5*ctx.canvas.width;
 	const y = pix*atom.pos[1] + 0.5*ctx.canvas.height;
 	const rad = pix*atom.radius*radiusScale;
-	const highlight = atom.color.map( v => (4*(v+1) > 255) ? 255 : 4*(v+1) );
-	const shadow = atom.color.map( v => Math.floor(0.7*v) );
+	const highlight = atom.color.map( v => (4*(v+50) > 255) ? 255 : 4*(v+50) );
+	const shadow = atom.color.map( v => Math.floor(0.65*v) );
 	const stop0 = `rgb(${highlight[0]}, ${highlight[1]}, ${highlight[2]})`;
 	//const stop1 = `rgb(${atom.color[0]}, ${atom.color[1]}, ${atom.color[2]})`;
 	const stop1 = `rgb(${shadow[0]}, ${shadow[1]}, ${shadow[2]})`;
