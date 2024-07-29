@@ -983,7 +983,7 @@
 
 	    // Require a minimum mouse displacement to start dragging
 	    if (mouseInfo.down && (Math.abs(dx) > mouseInfo.minMove || Math.abs(dy) > mouseInfo.minMove)) {
-		// Don't drag if no atom is selected or it has the background material
+		// Don't drag if no atom is selected or it is the background material
 		if (validSelection()) {
 		    // Set the state to dragging
 		    mouseInfo.dragging = true;
@@ -1001,15 +1001,9 @@
 		}
 	    }
 
-	    // The touch drag is outside the element
-	    if (mouseInfo.dragging && (mouseInfo.x < 0 || mouseInfo.y < 0 || mouseInfo.x >= rect.width || mouseInfo.y >= rect.height)) {
-		// Delete the molecule that was dragged out of the canvas
-		deleteSelection();
-		mouseEnd();
-	    }
-
-	    // If this is a touch event and we haven't set down yet
-	    if (touchEvent && !mouseInfo.down) {
+	    // If this is a new touch event, pause and set the drag origin
+	    // It is important that this block is before the touch drag block below
+	    if (touchEvent && !mouseInfo.down && mouseInfo.x >= 0 && mouseInfo.y >= 0 && mouseInfo.x < rect.width && mouseInfo.y < rect.height) {
 		// Get the atom under the mouse
 		mousePoint();
 
@@ -1024,15 +1018,22 @@
 		mouseInfo.dragWorldX = mouseInfo.worldX;
 		mouseInfo.dragWorldY = mouseInfo.worldY;
 		mouseInfo.dragWorldZ = mouseInfo.atomZ;
-		mouseState.innerHTML = 'touchdown';
+	    }
+
+	    // Is the mouse outside the element? This can happen with touch screens
+	    if (mouseInfo.x < 0 || mouseInfo.y < 0 || mouseInfo.x >= rect.width || mouseInfo.y >= rect.height) {
+		if (mouseInfo.dragging) {
+		    // Delete the molecule that was dragged out of the canvas
+		    deleteSelection();
+		}
+		mouseEnd();
 	    }
 	}
 
 	function mouseEnd() {
 	    // If we were dragging, run some minimization
 	    if (mouseInfo.dragging) {
-		minimize();
-		minimize();
+		minimize(400);
 		mouseInfo.dragging = false;
 	    }
 	    
@@ -1431,7 +1432,7 @@
 	// Delete a molecule from the system
 	function deleteSelection() {
 	    // Check that there is a valid selected fragment
-	    if (validSelection()) {
+	    if (validSelection()) {		
 		// Show the deletion in the selection status
 		const selectStatus = document.getElementById('selectStatus');
 		selectStatus.innerHTML = `<span class="selectDelete">Deleting <b>${mouseInfo.moleculeName}</b><br>&nbsp;</span>`;
@@ -1439,9 +1440,11 @@
 		
 		// Get the newest positions
 		const currPos = extractData(env, currTexInfo.pos, textures.width, textures.height);
+		//console.log(`Deleting ${mouseInfo.moleculeName} (fragment ${mouseInfo.fragment}). Position: ${currPos[0]} ${currPos[1]} ${currPos[2]}`);
 
 		// Update the texture data
-		atomTexData.deleteMolecule(currPos, mouseInfo.fragment, 0);
+		const selectTexColumn = 0; // select RGBA format: [fragment, monomer, material, radius]
+		atomTexData.deleteMolecule(currPos, mouseInfo.fragment, selectTexColumn);
 		
 		// Reinitialize the textures and frame buffers
 		textures = new MDTextures(gl, atomTexData, shaders, simSys);
