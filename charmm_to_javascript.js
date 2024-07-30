@@ -240,7 +240,7 @@ class MolecularStructure {
     mergeBespokeToExclusion() {
 	console.log('\nMerging bespoke terms with exclusion terms');
 	console.log(`Initially ${this.parameters[KIND.exclusion].length} exclusion parameters`);
-	const offset = this.parameters[KIND.bespoke].length;
+	const offset = this.parameters[KIND.exclusion].length;
 	for (let p = 0; p < this.parameters[KIND.bespoke].length; p++) {
 	    let par = this.parameters[KIND.bespoke][p];
 	    let types = this.unique[KIND.bespoke][p];
@@ -314,6 +314,7 @@ class MolecularStructure {
 
     deleteZeroParameters() {
 	console.log('\nDeleting parameters with zero force constants');
+	let deletedSomething = false;
 
 	for (let k = 0; k < KIND_NUM; k++) {
 	    // Don't delete exclusions or Lennard-Jones interactions
@@ -354,8 +355,15 @@ class MolecularStructure {
 	    this.parameters[k] = newParameters;
 	    this.terms[k] = newTerms;
 	    this.termParIndices[k] = newTermParIndices;
-	    console.log(`Deleted ${deleteParIndices.length} ${KIND_NAME[k]} parameters and ${deleteTermNum} ${KIND_NAME[k]} terms with zero force constants`);
+	    if (deleteTermNum > 0) {
+		console.log(`Deleted ${deleteParIndices.length} ${KIND_NAME[k]} parameters and ${deleteTermNum} ${KIND_NAME[k]} terms with zero force constants`);
+		deletedSomething = true;
+	    }
 	    //console.log(`Deleted ${deleteTermNum.length} ${KIND_NAME[k]} terms linked to these parameters`);
+	}
+
+	if (!deletedSomething) {
+	    console.log(`No terms with zero force constants were found. No terms were deleted.`);
 	}
     }
     
@@ -1230,6 +1238,7 @@ class MolecularStructure {
 		    uniqueMap[j].push(pi);
 		}
 	    }
+	    
 	    if (this.parameters[k].length != uniqueMap.length) {
 		console.log(`Compressing ${this.parameters[k].length} sets of ${KIND_NAME[k]} parameter values into ${uniqueMap.length} unique sets`);
 	    }
@@ -1257,7 +1266,7 @@ class MolecularStructure {
 		}
 		
 		if (newParIndex < 0) {
-		    console.log(`ERROR! Compression problem`);
+		    console.log(`ERROR! In compress(): parameter index ${oldParIndex} not found`);
 		    process.exit(1);
 		} else {
 		    this.termParIndices[k][ti] = newParIndex;
@@ -1318,11 +1327,13 @@ class MolecularStructure {
 	if (this.atomMonomerList != null) {
 	    let uniqueMonomers = null;	
 	    [uniqueMonomers, this.atomMonomerList] = this.compressProperty(this.atomMonomerList);
+	    console.log('Unique monomers: ' + uniqueMonomers.length);
 	}
 
 	if (this.atomFragmentList != null) {
 	    let uniqueFragments = null;
 	    [uniqueFragments, this.atomFragmentList] = this.compressProperty(this.atomFragmentList);
+	    console.log('Unique fragments: ' + uniqueFragments.length);
 	}
     }
     
@@ -1872,10 +1883,6 @@ console.log('outFile:', outFile);
 const mol = new MolecularStructure(psf, pdb, xsc, prmList);
 mol.printSummary();
 
-let j = outFile.lastIndexOf('.');
-const outFile1 = outFile.slice(0,j) + '.dat';
-mol.writeWithTypes(outFile1);
-
 // Generate residue monomer ids
 mol.generateMonomersByResidue();
 // Generate the fragment ids
@@ -1890,11 +1897,17 @@ if (mapFragments) {
 }
 mol.compressFragments();
 
+// Write the intermediate structure before compression (so types are still available)
+let j = outFile.lastIndexOf('.');
+const outFile1 = outFile.slice(0,j) + '.dat';
+mol.writeWithTypes(outFile1);
+
 // Merge impropers into dihedrals
 mol.mergeImproperToDihedral();
 
 // Merge the bespoke terms
 mol.mergeBespokeToExclusion();
+
 // Delete zero parameters
 mol.deleteZeroParameters();
 
