@@ -184,7 +184,10 @@ void main() {
   v_normal = vert; // Don't bother normalizing, since we will have to normalize after interpolation anyway.
   vec3 surfacePos = position.xyz + radius*vert;
 
-  v_color = color.xyz;
+  float bkg = 0.65*v_background;
+  float gray = (color.x + color.y + color.z)/3.0;
+
+  v_color = (1.0-bkg)*color.xyz + bkg*gray;
   v_surfaceToLight = lightPos - surfacePos;
   v_surfaceToView = cameraPos - surfacePos;
   gl_Position = matrix * vec4(surfacePos, 1.0);
