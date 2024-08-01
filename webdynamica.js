@@ -25,6 +25,9 @@
     // Enumeration of different simulation states
     const SimState = {none: 0, running: 1, minimizing: 2};
     const SimStateName = ['paused', 'running', 'minimizing'];
+
+    // Set the base molecule from the HTML document
+    const baseMoleculeNameHTML = document.getElementById('main').getAttribute('molecule');
     
     // Default simulation parameters
     const SimParameters = {
@@ -33,36 +36,32 @@
 	langevinDamping: 0.5, // in ps^-1
 	fieldOfView: 25.0, // in degrees
 	//additionalCapacity: 500,
-	additionalCapacity: 200,
+	additionalCapacity: 300,
 	initialState: SimState.running,
-	cameraPosFactor: 0.41,
-	//wallSpring: 0.0,
-	//restraintSpring: 0.0,
+	cameraPosFactor: 0.4,
+	baseMoleculeName: baseMoleculeNameHTML,
+	//wallSpring: 0.0, // remove the walls
+	//restraintSpring: 0.0, // remove the default restraints
 
-	baseMoleculeName: 'graph30_neg-pos',
-	//baseMoleculeName: 'graph30_aro1_wat',
-	//baseMoleculeName: 'graph50_n2_chp14aa',
-	//baseMoleculeName: 'graph_chp14aa_sol',
-	//baseMoleculeName: 'graph30_n4_dodecane',
-	//baseMoleculeName: 'graph30_n4_dodecane_spcf',
-	//baseMoleculeName: 'water_box',
-	//baseMoleculeName: 'decaalanine',
-	//baseMoleculeName: 'octane-water',
-	//baseMoleculeName: 'air',
-
-	// This is the name given in the molecule: mol.name
-	moleculeNames: ['argon','benzamidine','benzene','benzoate','dodecane','glucose','graphene','methane','N2','O2','water','octane','NAFT','zwit_aa_G','zwit_aa_T','zwit_PRO','zwit_aa_A','zwit_aa_E','zwit_aa_F','zwit_aa_K','zwit_aa_R','zwit_aa_S','zwit_aa_V','zwit_aa_W','zwit_aa_Y','sodium_ion','chloride_ion'],
+	// Make available all molecules loaded into MOLECULE
+	// This is used for making molecule thumbnails (selection box) and
+	// determining how big the bond, angle, dihedral, exclusion textures need to be.
+	moleculeNames: Object.keys(MOLECULE),
 
 	// Converts from resname to a displayed name
-	resNameMap: {'AR': 'argon', 'BAMI': 'benzamidinium(+)', 'BENZ': 'benzene', '3CB': 'benzoate(–)', 'C12': 'dodecane', 'BGLC': 'glucose', 'C': 'graphene', 'methane': 'METH', 'N2': 'dinitrogen', 'O2': 'dioxygen', 'GLY': 'glycine', 'PRO': 'proline', 'THR': 'threonine', 'ALA': 'alanine', 'GLU': 'glutamate(–)', 'PHE': 'phenylalanine', 'LYS': 'lysine(+)', 'ARG': 'arginine(+)', 'SER': 'serine', 'VAL': 'valine', 'TRP': 'tryptophan', 'TYR': 'tyrosine', 'TIP3': 'water', 'SPCF': 'water', 'C8': 'octane', 'NAFT': 'naphthalene', 'CLA': 'chloride ion(–)', 'SOD': 'sodium ion(+)'},
+	resNameMap: {'AR': 'argon', 'BAMI': 'benzamidinium(+)', 'BENZ': 'benzene', '3CB': 'benzoate(–)', 'C12': 'dodecane', 'BGLC': 'glucose', 'C': 'graphene', 'methane': 'METH', 'N2': 'dinitrogen', 'O2': 'dioxygen', 'GLY': 'glycine', 'PRO': 'proline', 'THR': 'threonine', 'ALA': 'alanine', 'GLU': 'glutamate(–)', 'PHE': 'phenylalanine', 'LYS': 'lysine(+)', 'ARG': 'arginine(+)', 'SER': 'serine', 'VAL': 'valine', 'TRP': 'tryptophan', 'TYR': 'tyrosine', 'TIP3': 'water', 'SPCF': 'water', 'C8': 'octane', 'NAFT': 'naphthalene', 'CLA': 'chloride ion(–)', 'SOD': 'sodium ion(+)', 'POT': 'potassium ion(+)', 'MG': 'magnesium ion(2+)', 'CAL': 'calcium ion(2+)', 'HSO4': 'bisulfate(–)', 'LIG2': 'lignin fragment', 'CELU': 'cellulose', 'QTZ': 'quartz', 'SIO2': 'silicon dioxide'},
 
 	// Converts from resname to an alternate displayed name
-	altNameMap: {'C12': 'C12 normal alkane', 'methane': 'CH<sub>4</sub>', 'N2': 'N<sub>2</sub>', 'O2': 'O<sub>2</sub>', 'GLY': 'Gly', 'PRO': 'Pro', 'THR': 'Thr', 'ALA': 'Ala', 'GLU': 'Glu', 'PHE': 'Phe', 'LYS': 'Lys', 'ARG': 'Arg', 'SER': 'Ser', 'VAL': 'Val', 'TRP': 'Trp', 'TYR': 'Tyr', 'TIP3': 'H<sub>2</sub>O', 'BGLC': 'grape sugar, dextrose', 'BENZ': 'C<sub>6</sub>H<sub>6</sub>', 'BAMI': 'benzamidine (protonated)', '3CB': 'benzoic acid (deprotonated)', 'C8': 'C8 normal alkane', 'CLA': 'Cl<sup>–</sup>', 'SOD': 'Na<sup>+</sup>'},
+	altNameMap: {'C12': 'C12 normal alkane', 'methane': 'CH<sub>4</sub>', 'N2': 'N<sub>2</sub>', 'O2': 'O<sub>2</sub>', 'GLY': 'Gly', 'PRO': 'Pro', 'THR': 'Thr', 'ALA': 'Ala', 'GLU': 'Glu', 'PHE': 'Phe', 'LYS': 'Lys', 'ARG': 'Arg', 'SER': 'Ser', 'VAL': 'Val', 'TRP': 'Trp', 'TYR': 'Tyr', 'TIP3': 'H<sub>2</sub>O', 'BGLC': 'grape sugar, dextrose', 'BENZ': 'C<sub>6</sub>H<sub>6</sub>', 'BAMI': 'benzamidine (protonated)', '3CB': 'benzoic acid (deprotonated)', 'C8': 'C8 normal alkane', 'CLA': 'Cl<sup>–</sup>', 'SOD': 'Na<sup>+</sup>', 'POT': 'K<sup>+</sup>', 'MG': 'Mg<sup>2+</sup>', 'CAL': 'Ca<sup>2+</sup>', 'HSO4': 'HSO<sub>4</sub><sup>–</sup>, hydrogen sulfate', 'CELU': '&beta;(1→4) polymer of glucose', 'QTZ': 'SiO<sub>2</sub>', 'SIO2': 'SiO<sub>2</sub>'},
 
 	// These are the molecule names of residues that can be inserted (mol.name)
-	insertNames: ['water','zwit_aa_G','zwit_aa_A','zwit_PRO','zwit_aa_F','zwit_aa_Y','zwit_aa_W','zwit_aa_E','zwit_aa_K','zwit_aa_R','zwit_aa_S','zwit_aa_T','zwit_aa_V','glucose','methane','octane','dodecane','benzene','benzoate','benzamidine','NAFT','N2','O2','argon','sodium_ion','chloride_ion'],
+	insertNames: ['water','zwit_aa_G','zwit_aa_A','zwit_PRO','zwit_aa_F','zwit_aa_Y','zwit_aa_W','zwit_aa_E','zwit_aa_K','zwit_aa_R','zwit_aa_S','zwit_aa_T','zwit_aa_V','glucose','methane','octane','dodecane','benzene','benzoate','benzamidine','NAFT','N2','O2','argon','sodium_ion','chloride_ion','magnesium','bisulfate'],
+
+	// How to map SVG group ids to molecules 
+	// (Assuming the scene svg exists)
+	sceneMoleculeMap: {'Air': 'air', 'Seawater': 'seawater', 'Wood': 'wood', 'Sand': 'sand'},
     }
-    
+
     // Set the default projection and camera
     class RenderInfo {
 	constructor(gl, simSys, fieldOfViewDegrees, cameraPosFactor = 0.4, lightPosFactor = 0.7, fadeFactor = 0.8) {
@@ -245,13 +244,13 @@
     // Generate the atom texture data structure
     // Returns the [atomTexData, simSys]
     // atomTexData is the AtomTextureData object and simSys is the SimulationSystem object
-    function prepareAtoms(MOLECULE, simParams) {
+    function prepareAtoms(MOLECULE, simParams, baseMoleculeName) {
 	// Check that the base molecule has been loaded
-	if (!Object.hasOwn(MOLECULE, simParams.baseMoleculeName)) {
-	    console.log(`ERROR! baseMolecule ${simParams.baseMoleculeName} has not been defined. Make sure the name is correct and that the script containing this molecule has been loaded in the HTML file.`)
+	if (!Object.hasOwn(MOLECULE, baseMoleculeName)) {
+	    console.log(`ERROR! baseMolecule ${baseMoleculeName} has not been defined. Make sure the name is correct and that the script containing this molecule has been loaded in the HTML file.`)
 	    return [];
 	}
-	const baseMolecule = MOLECULE[simParams.baseMoleculeName];
+	const baseMolecule = MOLECULE[baseMoleculeName];
 	
 	// Make the molecule thumbnails for the selection panel
 	console.log(`Base molecule "${baseMolecule.name}" has ${baseMolecule.num} atoms`);
@@ -265,6 +264,7 @@
 		if (mol.par_resname != null && mol.par_resname.length == 1) {
 		    const resName = mol.par_resname[0];
 		    thumbnails[resName] = new MoleculeThumbnail(mol, name);
+		    //console.log('thumbnail', resName);
 		}
 		//console.log(`Molecule "${mol.name}" has ${mol.num} atoms`);
 	    }
@@ -325,10 +325,6 @@
 	// Apply restraints to graphene
 	const restrainNum = atomTexData.restrainBackground(simSys.restraintSpring);
 	console.log(`Restraining ${restrainNum} atoms`);
-
-	//atomTexData.insertMolecule(MOLECULE['dodecane'], atomTexData.pos, [0.0, simSys.wall[1]-simSys.radius, 1.0]);
-	//atomTexData.insertMolecule(MOLECULE['dodecane'], atomTexData.pos, [0.0, -simSys.wall[1]+simSys.radius, 1.0]);
-	//atomTexData.insertMolecule(MOLECULE['glucose'], atomTexData.pos, [simSys.wall[0]-simSys.radius, 0.0, 1.0]);
 	
 	return [atomTexData, simSys, thumbnails, insertThumbnails];
     }
@@ -421,6 +417,9 @@
 	    this.minMove = 4; 
 	}
 
+	// Attempt to calculate the xy-position of the mouse pointer in the simulation world 
+	// There is something wrong with the logic, since we don't get the correct positions
+	// and have to use a fudge factor (this.scale)
 	toWorld(gl, viewProjectionMatrix, overrideMouseX, overrideMouseY) {
 	    const mouseX = overrideMouseX ?? this.x;
 	    const mouseY = overrideMouseY ?? this.y;
@@ -899,6 +898,35 @@
 	return dataArray;
     }
 
+
+    function setSceneColors(sceneElementColors, highlightGroupId) {
+	const sceneMap = document.getElementById('scenesvg');
+	if (sceneMap == null) return false;
+	
+	const highRgb = [100, 200, 240];
+	
+	for (const id of Object.keys(sceneElementColors)) {
+	    const element = document.getElementById(id);
+	    const parentId = element.parentElement.id;
+
+	    if (parentId == highlightGroupId) {
+		// set the color to a highlight color
+		const fill = sceneElementColors[id];
+		const rgb = fill.substring(4, fill.length-1).split(',');
+
+		const newRgb = [];
+		for (let i = 0; i < highRgb.length; i++) {
+		    newRgb[i] = Math.floor(0.4*parseInt(rgb[i]) + 0.6*highRgb[i]);
+		}
+		element.style.fill = `rgb(${newRgb[0]},${newRgb[1]},${newRgb[2]})`
+	    } else {
+		// Set the color to its original value
+		element.style.fill = sceneElementColors[id];
+	    }
+	}
+	return true;
+    }
+    
     
     //////////////////////////////////////////////////////////////////////
     // The main part of the program
@@ -914,44 +942,100 @@
 	let lastState = SimState.none;
 	let thermostatOn = true;
 	let hideMaterial = -1; // Don't hide anything
-
+	
 	/////////////////////////////////////////////////////////////
 	// Prepare the WebGL shaders and textures
         /////////////////////////////////////////////////////////////
 	const gl = prepareWebGL();
+
+	// External variables set by initSystem()
+	let atomTexData = null;
+	let simSys = null;
+	let thumbnails = null;
+	let insertThumbnails = null;
+	let shaders = null;
+	let textures = null;
+	let currTexInfo = null;
+	let nextTexInfo = null;
+	let renderInfo = null;
+	let env = null;
+	let step = 0;
+	let dynamicsStep = 0;
+	let frame = 0;
+
+	// Initialize the mouse/pointer/touch data
+	let mouseInfo = new MouseInfo();
 	
-	// Prepare the texture data
-	const termsPerAtom = [];
-	let [atomTexData, simSys, thumbnails, insertThumbnails] = prepareAtoms(MOLECULE, SimParameters);
+	function initSystem(baseMoleculeName) {
+	    // Prepare the texture data
+	    [atomTexData, simSys, thumbnails, insertThumbnails] = prepareAtoms(MOLECULE, SimParameters, baseMoleculeName);
 
-	// Initialize the shader code
-	const shaders = new MDShaders(gl, atomTexData, atomMinDist, atomMaxDisplace);
+	    // Initialize the shader code
+	    shaders = new MDShaders(gl, atomTexData, atomMinDist, atomMaxDisplace);
 
-	// Initialize the textures and frame buffers
-	let textures = new MDTextures(gl, atomTexData, shaders, simSys);
+	    // Initialize the textures and frame buffers
+	    textures = new MDTextures(gl, atomTexData, shaders, simSys);
 
-	// Structure for cycling textures
-	let currTexInfo = {posFB: textures.posFB0, pos: textures.pos0, randomFB: textures.randomFB0, random: textures.random0};
-	let nextTexInfo = {posFB: textures.posFB1, pos: textures.pos1, randomFB: textures.randomFB1, random: textures.random1};
+	    // Structure for cycling textures
+	    currTexInfo = {posFB: textures.posFB0, pos: textures.pos0, randomFB: textures.randomFB0, random: textures.random0};
+	    nextTexInfo = {posFB: textures.posFB1, pos: textures.pos1, randomFB: textures.randomFB1, random: textures.random1};
 
-	// Initialize the view
-	const renderInfo = new RenderInfo(gl, simSys, SimParameters.fieldOfView, SimParameters.cameraPosFactor);
+	    // Initialize the view
+	    renderInfo = new RenderInfo(gl, simSys, SimParameters.fieldOfView, SimParameters.cameraPosFactor);
 
-	// Pack these objects together to avoid function calls with too many parameters.
-	// - Maybe the more idiomatic way in JavaScript is to define the functions here
-	// so these variables would be in scope.
-	// - But this makes me uncomfortable because it isn't clear
-	// what the inputs to the function are.
-	// - However, we have to update this when we alter the textures
-	let env = {gl: gl, shaders: shaders, textures: textures, simSys: simSys};
+	    // Pack these objects together to avoid function calls with too many parameters.
+	    // - Maybe the more idiomatic way in JavaScript is to define the functions here
+	    // so these variables would be in scope.
+	    // - But this makes me uncomfortable because it isn't clear
+	    // what the inputs to the function are.
+	    // - However, we have to update this when we alter the textures
+	    env = {gl: gl, shaders: shaders, textures: textures, simSys: simSys};
+
+	    // Simulation step counters
+	    step = 0;
+	    dynamicsStep = 0;
+	    frame = 0;
+	    thermostatOn = (baseMoleculeName != 'air');
+	    updateThermostatCheck();
+	}
+	// Create the initial system based on the baseMolecule
+	initSystem(SimParameters.baseMoleculeName);
 
 	
 	/////////////////////////////////////////////////////////////
 	// User interface functions
         /////////////////////////////////////////////////////////////
-	let mouseInfo = new MouseInfo();
-	//const mouseStatus = document.getElementById("mouseStatus");
 
+	// Prepare the svg scene for interaction, IF IT EXISTS
+	// For example, the beach scene allows you to click the water
+	// and see a molecular representation of seawater, or click
+	// the palm tree and see a molecular representation of wood
+	const sceneMap = document.getElementById('scenesvg');
+	const sceneElementColors = {};
+	// The scene map may or may not exist
+	if (sceneMap != null) {
+	    const sceneRegions = sceneMap.childNodes;
+	    // Check for clicks on the scene
+	    for (const region of sceneRegions) {
+		if (region.nodeName == 'g') {
+		    region.addEventListener('mouseover', function() {enterSceneRegion(region)});
+		    region.addEventListener('mouseleave', function() {exitSceneRegion(region)});
+		    region.addEventListener('mousedown', function() {clickSceneRegion(region)});
+
+		    // Get the original colors of all child objects
+		    // We'll reset them after highlighting
+		    for (const child of region.childNodes) {
+			if (child.nodeName == 'path' || child.nodeName == 'rect') {
+			    //console.log(child.id, child.nodeName, child.style.fill);
+			    sceneElementColors[child.id] = child.style.fill;
+			}
+		    }
+		}
+	    }
+	    setSceneColors(sceneElementColors);
+	}
+
+	// Handle movements of the mouse on the WebGL canvas or touchmove events
 	function mouseMove(event) {
 	    // Stop window from scrolling
 	    event.preventDefault();
@@ -1030,10 +1114,11 @@
 	    }
 	}
 
+	// The mouse or touch pointer has left the WebGL canvas or the mouse button has been released
 	function mouseEnd() {
 	    // If we were dragging, run some minimization
 	    if (mouseInfo.dragging) {
-		minimize(400);
+		minimize(200);
 		mouseInfo.dragging = false;
 	    }
 	    
@@ -1047,6 +1132,8 @@
 	    updateSelectionPanel();
 	}
 
+	// Here we determine what the mouse is pointing at in the WebGL canvas
+	// This requires running a WebGL shader to render a single pixel under the mouse
 	function mousePoint() {
 	    // Get the mouse position
 	    const mouseMatrix = getMouseMatrix(gl, mouseInfo.x, mouseInfo.y, renderInfo);
@@ -1055,6 +1142,7 @@
 
 	    // What atom is the mouse on?
 	    // Render a single pixel to the pick buffer, coloring by (x, y, z, atomIndex+1)
+	    // shaders.drawPositionsFS has flat coloring with float colors of (x, y, z, atomIndex+1)
 	    const selectInfo = {id: mouseInfo.fragment, mask: [1, 0, 0, 0], atom: mouseInfo.atom, scale: 1.0, hideMaterial: hideMaterial};
 	    drawAtoms(env, shaders.drawPositions, shaders.drawPositionsLocs, currTexInfo.pos, selectInfo, renderInfoPick, textures.pickFB, 1, 1);
 	    const pickData = extractData(env, textures.pick, 1, 1);
@@ -1063,14 +1151,16 @@
 	    mouseInfo.atomX = pickData[0];
 	    mouseInfo.atomY = pickData[1];
 	    mouseInfo.atomZ = pickData[2];
-	    // This is an empirical kludge since I can't revert the projection correctly
+	    // Calculate a fudge factor to convert the mouse position (in canvas pixels)
+	    // to the simulation world coordinates.
+	    // This is an empirical kludge since I haven't figured out how to revert the projection correctly
 	    if (Math.abs(mouseInfo.atomX) > 5.0) {
 		mouseInfo.scale = mouseInfo.atomX/mouseInfo.worldX;
 	    } else if (Math.abs(mouseInfo.atomY) > 5.0) {
 		mouseInfo.scale = mouseInfo.atomY/mouseInfo.worldY;
 	    }
 	    
-	    // Set the fragment, monomer, type, resName
+	    // Set the fragment, monomer, type, resName of the selected atom
 	    if (mouseInfo.atom >= 0 && mouseInfo.atom < atomTexData.typeList.length) {
 		// The fragment, monomer, type, and resName are taken from JavaScript arrays
 		// using the atom index
@@ -1080,6 +1170,7 @@
 		mouseInfo.type = atomTexData.typeList[mouseInfo.atom];
 		mouseInfo.resName = atomTexData.resNameList[mouseInfo.atom];
 	    } else {
+		// Set values that represent that nothing is selected
 		mouseInfo.fragment = -1;
 		mouseInfo.monomer = -1;
 		mouseInfo.material = -1;
@@ -1097,6 +1188,36 @@
 	    } else {
 		return true;
 	    }
+	}
+
+	/////////////////////////////////////////////////////////////
+	// Handle interaction with a scene
+	// For example, the beach scene allows you to click the water
+	// and see a molecular representation of seawater, or click
+	// the palm tree and see a molecular representation of wood
+	function enterSceneRegion(sceneGroup) {
+	    setSceneColors(sceneElementColors, sceneGroup.id);
+	}
+	function exitSceneRegion(sceneGroup) {
+	    setSceneColors(sceneElementColors, null);
+	}
+	function clickSceneRegion(sceneGroup) {
+	    const map = SimParameters.sceneMoleculeMap;
+	    if (Object.hasOwn(map, sceneGroup.id)) {
+		const baseMoleculeName = map[sceneGroup.id];
+		console.log(`Clicked ${sceneGroup.id}, setting system to ${baseMoleculeName}`);
+		if (Object.hasOwn(MOLECULE, baseMoleculeName)) {
+		    // Reinitialize everything!
+		    initSystem(baseMoleculeName);
+		} else {
+		    console.log(`ERROR! baseMolecule ${baseMoleculeName} has not been defined. Make sure the name is correct and that the script containing this molecule has been loaded in the HTML file.`)
+		}
+	    } else {
+		console.log(`ERROR! No molecule in sceneMoleculeMap for scene id ${sceneGroup.id}`);
+	    }
+
+	    // Set the system name
+	    document.getElementById('systemName').textContent = sceneGroup.id;
 	}
 
 	/////////////////////////////////////////////////////////////
@@ -1121,11 +1242,9 @@
 	    mouseInfo.dragWorldY = mouseInfo.worldY;
 	    mouseInfo.dragWorldZ = mouseInfo.atomZ;
 	});
-
 	// We've released the mouse, so continue what we were doing
-	gl.canvas.addEventListener('mouseup', (e) => {
-	    mouseEnd();
-	});
+	gl.canvas.addEventListener('mouseup', mouseEnd);
+	
 	// Mouse has left the viewport
 	gl.canvas.addEventListener('mouseout', (e) => {
 	    if (mouseInfo.dragging) {
@@ -1139,39 +1258,11 @@
 	/////////////////////////////////////////////////////////////
 	// Touch events
 	gl.canvas.addEventListener('touchmove', mouseMove, {passive: false});
-	// gl.canvas.addEventListener('touchcancel', (e) => {
-	//     mouseEnd();
-	//     mouseStatus.innerHTML = 'touchcancel';
-	// });
-	// gl.canvas.addEventListener('touchend', (e) => {
-	//     mouseEnd();
-	//     mouseStatus.innerHTML = 'touchend';
-	// });
 	gl.canvas.addEventListener('touchstart', mouseMove);
 	gl.canvas.addEventListener('touchcancel', mouseEnd);
 	gl.canvas.addEventListener('touchend', mouseEnd);
 
-
-
-	// Keyboard displacements
-	function displaceSel(displace) {
-	    // Don't allow moving the background
-	    if (mouseInfo.material == MaterialEnum.background) return;
-	    
-	    // Do the displacement in multiple stages
-	    const dispMag = Math.sqrt(displace[0]**2 + displace[1]**2 + displace[2]**2);
-	    const stages = Math.ceil(dispMag/0.5);
-	    const stageDisplace = [displace[0]/stages, displace[1]/stages, displace[2]/stages];
-
-	    // Displace and minimize the energy
-	    const selectInfo = {id: mouseInfo.fragment, mask: [1, 0, 0, 0], atom: mouseInfo.atom};
-	    for (let s = 0; s < stages; s++) {
-		runDisplaceShader(env, currTexInfo.pos, selectInfo, stageDisplace, nextTexInfo.posFB);
-		swapPositionBuffers();
-		minimize(100); // a little quicker
-	    }
-	}
-	
+	/////////////////////////////////////////////////////////////
 	// Handle keyboard input
 	window.addEventListener('keydown', function(event) {
 	    const dispMag = 2.0; // in Å
@@ -1212,6 +1303,29 @@
 		 break;
              }
 	});
+	
+	// Keyboard displacements
+	function displaceSel(displace) {
+	    // Don't allow moving the background
+	    if (mouseInfo.material == MaterialEnum.background) return;
+	    
+	    // Do the displacement in multiple stages
+	    const dispMag = Math.sqrt(displace[0]**2 + displace[1]**2 + displace[2]**2);
+	    const stages = Math.ceil(dispMag/0.5);
+	    const stageDisplace = [displace[0]/stages, displace[1]/stages, displace[2]/stages];
+
+	    // Displace and minimize the energy
+	    const selectInfo = {id: mouseInfo.fragment, mask: [1, 0, 0, 0], atom: mouseInfo.atom};
+	    for (let s = 0; s < stages; s++) {
+		runDisplaceShader(env, currTexInfo.pos, selectInfo, stageDisplace, nextTexInfo.posFB);
+		swapPositionBuffers();
+		minimize(100); // a little quicker
+	    }
+	}
+	
+
+	/////////////////////////////////////////////////////////////
+	// Buttons, checkboxes, and input fields
 	
 	// Handle play button
 	window.togglePlay = function() {
@@ -1318,9 +1432,46 @@
 	}
 	updateShowWaterCheck();
 
+	// Minimization button
+	window.pressMinimize = function() {
+	    if ( currState != SimState.minimizing ) {
+		currState = SimState.minimizing;
+	    } else {
+		currState = SimState.none;
+	    }
+	    updatePlayButton()
+	}
+
+	// Show a 2D diagram of the selected molecule
+	function updateSelectionPanel() {
+	    // Set the name of the selected residue
+	    if (Object.hasOwn(SimParameters.resNameMap, mouseInfo.resName)) {
+		mouseInfo.moleculeName = SimParameters.resNameMap[mouseInfo.resName];
+		document.getElementById('moleculeName').innerHTML = mouseInfo.moleculeName;
+	    } else {
+		mouseInfo.moleculeName = mouseInfo.resName;
+		document.getElementById('moleculeName').innerHTML = `<i>${mouseInfo.resName}</i>`;
+	    }
+	    if (Object.hasOwn(SimParameters.altNameMap, mouseInfo.resName)) {
+		document.getElementById('alternateName').innerHTML = `other names: ${SimParameters.altNameMap[mouseInfo.resName]}`;
+	    } else {
+		document.getElementById('alternateName').innerHTML = '&nbsp;';
+	    }
+	    
+	    // Draw the selected residue in the 2d canvas
+	    if (Object.hasOwn(thumbnails, mouseInfo.resName)) {
+		thumbnails[mouseInfo.resName].draw(selectContext2d);
+	    } else {
+		selectContext2d.clearRect(0, 0, selectContext2d.canvas.width, selectContext2d.canvas.height);
+	    }
+	}
 	
+	/////////////////////////////////////////////////////////////
+	// Functions that modify the system used by the user interface
+        /////////////////////////////////////////////////////////////
 
 	// Run a shader to minimize energy
+	// This gets called in many different places
 	function minimize(steps = 200) {
 	    let stepSize = 0.05;
 	    const minStepSize = 1e-4;
@@ -1338,43 +1489,6 @@
 	    advanceRandomNumbers();
 	    runResetVelocityShader(env, currTexInfo.random, simSys.kT, textures.velFB);
 	}
-
-	// Minimization button
-	window.pressMinimize = function() {
-	    if ( currState != SimState.minimizing ) {
-		currState = SimState.minimizing;
-	    } else {
-		currState = SimState.none;
-	    }
-	    updatePlayButton()
-	}
-
-	function updateSelectionPanel() {
-	    // Set the name of the selected residue
-	    if (Object.hasOwn(SimParameters.resNameMap, mouseInfo.resName)) {
-		mouseInfo.moleculeName = SimParameters.resNameMap[mouseInfo.resName];
-		document.getElementById('moleculeName').innerHTML = mouseInfo.moleculeName;
-	    } else {
-		mouseInfo.moleculeName = 'none';
-		document.getElementById('moleculeName').innerHTML = '<i>none</i>';
-	    }
-	    if (Object.hasOwn(SimParameters.altNameMap, mouseInfo.resName)) {
-		document.getElementById('alternateName').innerHTML = `other names: ${SimParameters.altNameMap[mouseInfo.resName]}`;
-	    } else {
-		document.getElementById('alternateName').innerHTML = '&nbsp;';
-	    }
-	    
-	    // Draw the selected residue in the 2d canvas
-	    if (Object.hasOwn(thumbnails, mouseInfo.resName)) {
-		thumbnails[mouseInfo.resName].draw(selectContext2d);
-	    } else {
-		selectContext2d.clearRect(0, 0, selectContext2d.canvas.width, selectContext2d.canvas.height);
-	    }
-	}
-	
-	/////////////////////////////////////////////////////////////
-	// Functions to modify the system used by the user interface
-        /////////////////////////////////////////////////////////////
 	
 	// For Verlet, we keep the random number and position buffers together
 	// But there are times when we want to swap one and not the other
@@ -1389,7 +1503,8 @@
 	    currTexInfo.randomFB = nextTexInfo.randomFB;
 	    nextTexInfo.randomFB = tempFB;
 	}
-	
+
+	// Cycle positions
 	function swapPositionBuffers() {
 	    const tempTex = currTexInfo.pos;
 	    currTexInfo.pos = nextTexInfo.pos;
@@ -1402,15 +1517,12 @@
 
 	
 	// Insert a molecule into the system
-	function insertMolecule(mol, name) {
-	    selectStatus.innerHTML = `<span class="selectInsert">Inserting <b>${name}</b><br>&nbsp;</span>`;
-	    selectStatusTime = performance.now();
-	    
+	function insertMolecule(mol, name) {	    
 	    // Get the newest positions
 	    const currPos = extractData(env, currTexInfo.pos, textures.width, textures.height);
 
 	    // Update the texture data
-	    const insertPos = [-simSys.wall[0]+simSys.radius, -simSys.wall[1]+simSys.radius, 1.0];
+	    const insertPos = [-simSys.wall[0]*0.8+simSys.radius, -simSys.wall[1]*0.8+simSys.radius, 1.0];
 	    const ok = atomTexData.insertMolecule(mol, currPos, insertPos);
 
 	    if (ok) {
@@ -1425,7 +1537,13 @@
 		nextTexInfo = {posFB: textures.posFB1, pos: textures.pos1, randomFB: textures.randomFB1, random: textures.random1};
 		
 		// Relax everything (also resets velocities)
-		minimize(1000);
+		minimize(500);
+
+		selectStatus.innerHTML = `<span class="selectInsert">Inserting <b>${name}</b><br>&nbsp;</span>`;
+		selectStatusTime = performance.now();
+	    } else {
+		selectStatus.innerHTML = `<span class="selectDelete"><i>Could not insert! Too many atoms.</i></span>`;
+		selectStatusTime = performance.now();
 	    }
 	}
 
@@ -1466,11 +1584,8 @@
 	//////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////
 	// Prepare for the simulation loop
-	let step = 0;
-	let dynamicsStep = 0;
 	let runSteps = 20;
 	const analysisFrames = 20;
-	let frame = 0;
 	let selectStatusTime = performance.now();
 
 	// 2D canvas for molecule identification
@@ -1488,10 +1603,9 @@
 		minimize(runSteps);
 		step+=runSteps;
 	    } else if (currState == SimState.running) {
-		// Run dynamics
+		// Velocity Verlet for Langevin dynamics from
+		// Izaguirre et al. (2001) Langevin stabilization of molecular dynamics. J. Chem. Phys. 114(5), 2090–2098. DOI: 10.1063/1.1332996
 		for (let i = 0; i < runSteps; i++) {
-		    // Velocity Verlet for Langevin dynamics from
-		    // Izaguirre et al. (2001) Langevin stabilization of molecular dynamics. J. Chem. Phys. 114(5), 2090–2098. DOI: 10.1063/1.1332996
 		    if (thermostatOn) {
 			// First half-kick
 			// We correctly use same random numbers as the previous second half-kick
@@ -1583,8 +1697,8 @@
 		if (currState != SimState.none) {
 		    if (framesPerSecond < 20.0) {
 			runSteps = Math.ceil(runSteps*framesPerSecond/20.0);
-		    } else if (framesPerSecond > 45.0) {
-			runSteps = Math.ceil(runSteps*framesPerSecond/45.0);
+		    } else if (framesPerSecond > 35.0) {
+			runSteps = Math.ceil(runSteps*framesPerSecond/35.0);
 		    }
 		    // Put some kind of sane limits on runSteps
 		    if (runSteps < 2) {
@@ -1624,13 +1738,15 @@
 		}		
 	    }
 	    
-	    // // Set mouse status info
+	    // Set mouse status info
 	    //const mouseStatus1 = document.getElementById("mouseStatus1");
 	    //mouseStatus1.innerHTML = `<br>Mouse: ${mouseInfo.x} ${mouseInfo.y}<br>Atom: ${mouseInfo.atom}<br>Atom pos.: ${mouseInfo.atomX.toFixed(2)} ${mouseInfo.atomY.toFixed(2)} ${mouseInfo.atomZ.toFixed(2)}<br>World: ${mouseInfo.worldX.toFixed(2)} ${mouseInfo.worldY.toFixed(2)} ${mouseInfo.worldZ.toFixed(2)}<br>Fragment: ${mouseInfo.fragment}<br>Residue: ${mouseInfo.resName}<br>Monomer: ${mouseInfo.monomer}<br>Material: ${mouseInfo.material}<br>Type: ${mouseInfo.type}<br>Mouse scale: ${mouseInfo.scale.toFixed(2)}`;
 	    
 	    // Make the selection pulse with time (using frame makes it stutter)
 	    const selectScale = 0.85 + 0.6*Math.cos(2.0*Math.PI*(performance.now()-cycleStartTime)/800.0);
+	    // Highlight the whole fragment
 	    //const selectInfo = {id: mouseInfo.fragment, mask: [1, 0, 0, 0], atom: mouseInfo.atom, scale: selectScale, hideMaterial: hideMaterial};
+	    // Highlight just the monomer
 	    const selectInfo = {id: mouseInfo.monomer, mask: [0, 1, 0, 0], atom: mouseInfo.atom, scale: selectScale, hideMaterial: hideMaterial};
 	    // Draw the scene
 	    // We have already cycled from nextTexInfo to currTexInfo, so use currTexInfo	    
