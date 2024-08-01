@@ -90,7 +90,7 @@ class AtomTextureData {
 
 	// Special residue names
 	this.waterResNames = ['TIP3', 'TIP4', 'SPCE', 'SPCF', 'WAT', 'HOH'];
-	this.backgroundResNames = ['C', 'GRPH'];
+	this.backgroundResNames = ['C', 'GRPH', 'CELU', 'QTZ'];
 	
 	// Create the texture data 
 	// Define the dimensions of the textures
@@ -434,7 +434,7 @@ class AtomTextureData {
 	    const resName = this.resNameList[ai];
 	    
 	    let color = null;
-	    if (resName == 'C' && type[0] == 'C') {
+	    if (this.backgroundResNames.some((rn) => rn == resName ) && type[0] == 'C') {
 		// Gray for graphene carbon
 		color = [0.75,0.75,0.75];
 	    } else {
@@ -460,7 +460,9 @@ class AtomTextureData {
 	let n = 0;
 	for (let ai = 0; ai < this.size; ai++) {
 	    const material = this.select[4*ai+2];
-	    if (material == MaterialEnum.background) {
+	    const mass = this.nonbond[4*ai]; // Don't restrain hydrogen
+
+	    if (material == MaterialEnum.background && mass > 4.0) {
 		this.restrain[4*ai+3] = spring;
 		n++;
 	    }
@@ -854,7 +856,7 @@ class AtomTextureData {
 	color.O =  [0.85, 0.15, 0.15];
 	color.F =  [0.75, 1.00, 0.00];
 	color.Na = [0.84, 0.67, 0.59];
-	color.Si = [0.36, 0.57, 0.60];
+	color.Si = [0.20, 0.57, 0.60];
 	color.P =  [0.78, 0.33, 0.09];
 	color.S =  [0.77, 0.77, 0.24];
 	color.Se = [0.39, 0.17, 0.05];
