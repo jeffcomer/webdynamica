@@ -1,7 +1,7 @@
 #!/bin/bash
 
 tab="    "
-moleculeList=(../Molecules/mol_{water,benzene,benzoate,benzamidine,NAFT,methane,octane,dodecane,glucose,N2,O2,argon,graphene,sodium_ion,chloride_ion}.webdyn.js ../Molecules/mol_zwit_aa_{A,E,F,G,K,R,S,T,V,W,Y}.webdyn.js ../Molecules/mol_zwit_PRO.webdyn.js)
+moleculeList=(../../Molecules/mol_{water,benzene,benzoate,benzamidine,NAFT,methane,octane,dodecane,glucose,N2,O2,argon,graphene,sodium_ion,chloride_ion,potassium,calcium,magnesium,bisulfate,cellulose_fragment,lignin_fragment,quartz,SiO2}.webdyn.js ../../Molecules/mol_zwit_aa_{A,E,F,G,K,R,S,T,V,W,Y}.webdyn.js ../../Molecules/mol_zwit_PRO.webdyn.js)
 
 # Insert the molecules if they exist
 if [[ -f ${moleculeList[0]} ]]; then
@@ -22,6 +22,7 @@ if [[ -f ${moleculeList[0]} ]]; then
 	
 	echo "${tab}<script>" >> $output
 	cat $f >> $output
+	echo "" >> $output
 	echo "${tab}</script>" >> $output
 	nameStr="${nameStr}'${name}',"
     done
