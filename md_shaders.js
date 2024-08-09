@@ -782,6 +782,8 @@ uniform float coulomb;
 #define EXCLUDE_TEX_HEIGHT ${this.EXCLUDE_TEX_HEIGHT}
 #define EXCLUDE_TERMS_PER_ATOM ${this.EXCLUDE_TERMS_PER_ATOM}
 
+#define PI 3.14159265358979323846
+
 // Wrap with the nearest image convention
 vec3 wrap(vec3 diffVec, vec3 box) {
   return diffVec - box*floor(diffVec/box + 0.5);
@@ -1347,20 +1349,33 @@ vec4 angleForce(vec3 pos0, vec2 posTexCoord) {
       float b_rmag = 1.0/b_mag;
       vec3 a_unit = a*a_rmag;
       vec3 b_unit = b*b_rmag;
-      float cosTheta = dot(a_unit, b_unit);
-      // The conditional can avoid some numerical problems
-      float sinTheta = (abs(cosTheta) >= 1.0) ? 0.0 : sqrt(1.0 - cosTheta*cosTheta);
-      float delTheta = acos(cosTheta) - parTheta;
-      // Straight angles with very small sinTheta need this approximation for stability
-      float factor = (sinTheta > 1e-5) ? (2.0*parK*delTheta/sinTheta) : sign(delTheta)*2.0*parK;
 
-      // Calculate the angle force
-      // Role 0 (leg atom) has a different formula than role 1 (central atom)
-      if (role == 0.0) {
-	force += factor * a_rmag * (b_unit - cosTheta*a_unit);
-      } else {
-	force += factor*(cosTheta*(a_unit*a_rmag + b_unit*b_rmag) - (a + b)*(a_rmag*b_rmag));
-      }
+      // This way of calculating the angles (atan(sinTheta,cosTheta))
+      // gives two orders of magnitude better accuracy than acos(cosTheta).
+      // I'm not sure why! Is this true on all hardware?
+      float cosTheta = dot(a_unit, b_unit);
+      float sinTheta = length(cross(a_unit, b_unit));
+      float theta = (cosTheta == 0.0) ? 0.5*PI : atan(sinTheta,cosTheta);
+      //float theta = acos(cosTheta);
+      float delTheta = theta - parTheta;
+      
+      // Get the magnitude of the force
+      float fmag1 = 2.0 * parK * delTheta * a_rmag;
+      float fmag3 = 2.0 * parK * delTheta * b_rmag;
+
+      // Create a basis ex and ey
+      vec3 ex = a_unit;
+      // A vector that isn't colinear with a_unit
+      vec3 unique = (a_unit.x == 0.0 && a_unit.y == 0.0) ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+      vec3 vec = (sinTheta == 0.0) ? unique : b_unit;
+      vec3 proj = vec - dot(ex, vec)*ex;
+      vec3 ey = normalize(proj); // we've already ensured that proj is nonzero
+
+      // Get the force direction
+      vec3 fdir1 = ey;
+      vec3 fdir3 = ex*sinTheta - ey*cosTheta;
+      force += (role == 0.0) ? fmag1*fdir1 : -(fmag1*fdir1 + fmag3*fdir3);    
+
       // Shared among the three atoms, so a factor of 1/3
       energy += parK*delTheta*delTheta/3.0;
     }
@@ -1450,8 +1465,8 @@ vec4 dihedralForce(vec3 pos0, vec2 posTexCoord) {
 
       // Calculate the dihedral angle
       float cosPhi = dot(M, N);
-      // The conditional is to avoid erroneous phi values (pi/4) on some renderers
-      float sinPhi = (abs(cosPhi) >= 1.0) ? 0.0 : sqrt(1.0 - cosPhi*cosPhi);
+      // Calculating sinPhi this way instead of sqrt((1.0 - cosPhi)*(1.0 + cosPhi) improves accuracy and is more stable
+      float sinPhi = length(cross(M, N));
       float phi = -atan(sinPhi, cosPhi);
       // Impropers have parMulti = 0
       // Surprisingly, there is little change between regular and improper dihedrals, 
