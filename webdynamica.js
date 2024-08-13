@@ -1094,6 +1094,10 @@
 		if (validSelection()) {
 		    // Set the state to dragging
 		    mouseInfo.dragging = true;
+		    if (currState == SimState.running ) {
+			// Minimization is a bit slower
+			runSteps = Math.ceil(runSteps/2);
+		    }
      		    currState = SimState.minimizing;
      		    updatePlayButton();
 
@@ -1457,6 +1461,11 @@
 
 	// Minimization button
 	window.pressMinimize = function() {
+	    if (currState == SimState.running ) {
+		// Minimization is a bit slower
+		runSteps = Math.ceil(runSteps/2);
+	    }
+	    
 	    if ( currState != SimState.minimizing ) {
 		currState = SimState.minimizing;
 	    } else {
