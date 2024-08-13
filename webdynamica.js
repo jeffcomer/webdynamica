@@ -105,6 +105,8 @@
 	    this.hashDim = atomTexData.hashDim;
 
 	    // Hash function (linear congruential generator) multipliers
+	    // Note that this is stored as a reference, so it
+	    // changes when the hash table is regenerated
 	    this.hashA = atomTexData.hashA;
 	    
 	    // Force field textures

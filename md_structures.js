@@ -133,6 +133,7 @@ class AtomTextureData {
 	this.nameList = new Array(this.size).fill('UNK');
 
 	// Insert the base molecule into the texture data arrays
+	this.hashDim = {};
 	this.insertMolecule(baseMolecule, this.pos);
 	// Hash table is initialized in insertMolecule
     }
@@ -230,7 +231,7 @@ class AtomTextureData {
 	}
 
 	// Regenerate the hash table
-	this.makeHashTable();
+	this.makeHashTable(this.hashDim.width, this.hashDim.height);
 	
 	return deleteList.length;
     }
@@ -428,7 +429,7 @@ class AtomTextureData {
 	this.insertRestrain(mol, map);
 	
 	// Regenerate the hash table
-	this.makeHashTable();
+	this.makeHashTable(this.hashDim.width, this.hashDim.height);
 	
 	return true;
     }
@@ -801,16 +802,10 @@ class AtomTextureData {
 	return maxTerms;
     }
 
-    makeHashTable() {
-	// Optimize the hash table parameters for the least collisions
-	const hashTableAttempts = 15;
-	// We use a large fill factor so we only have 1 or 2 collisions at worst
-	// However, getting zero collisions and then making the shader not check for collisions doesn't improve performance noticeably (may degrade performance slightly due to larger hash table?)
-	//const hashTableFillFactor = 15;
-	const hashTableFillFactor = 23;
-	//const hashTableFillFactor = 201; // try to get zero collisions (not worth it)
-	this.stopCollisions = 20; // Don't allow more than some number of collisions
-
+    sizeHashTable(hashTableFillFactor = 23) {
+	// We use a large default fill factor so we only have 1 or 2 collisions at worst
+	//hashTableFillFactor = 201; // try to get zero collisions (not worth it)
+	
 	// Count the number of active exclusions (or special L-J parameters) in the exclusion data
 	const excludePerAtom = this.termsPerAtom[TermInfo.exclude];
 	const excludeList = [];
@@ -827,16 +822,10 @@ class AtomTextureData {
 	}
 	const excludeCount = excludeList.length;
 
-	// Create the hash table
-	this.hashDim = {};
-	const hashSize = hashTableFillFactor*excludeCount;
-
-	// Note that "primes" (used for the hash table texture dimensions) and "bigPrimes" (used for the multipliers)
-	// must be disjoint. (a == m is bad for the linear congruential generator).
-	// Also, 991*16381 < 2^24 (needed for exact handling of integers with 32-bit floats)
 	const primes = [5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503, 509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587, 593, 599, 601, 607, 613, 617, 619, 631, 641, 643, 647, 653, 659, 661, 673, 677, 683, 691, 701, 709, 719, 727, 733, 739, 743, 751, 757, 761, 769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839, 853, 857, 859, 863, 877, 881, 883, 887, 907, 911, 919, 929, 937, 941, 947, 953, 967, 971, 977, 983, 991];
-	const bigPrimes = [15013, 15017, 15031, 15053, 15061, 15073, 15077, 15083, 15091, 15101, 15107, 15121, 15131, 15137, 15139, 15149, 15161, 15173, 15187, 15193, 15199, 15217, 15227, 15233, 15241, 15259, 15263, 15269, 15271, 15277, 15287, 15289, 15299, 15307, 15313, 15319, 15329, 15331, 15349, 15359, 15361, 15373, 15377, 15383, 15391, 15401, 15413, 15427, 15439, 15443, 15451, 15461, 15467, 15473, 15493, 15497, 15511, 15527, 15541, 15551, 15559, 15569, 15581, 15583, 15601, 15607, 15619, 15629, 15641, 15643, 15647, 15649, 15661, 15667, 15671, 15679, 15683, 15727, 15731, 15733, 15737, 15739, 15749, 15761, 15767, 15773, 15787, 15791, 15797, 15803, 15809, 15817, 15823, 15859, 15877, 15881, 15887, 15889, 15901, 15907, 15913, 15919, 15923, 15937, 15959, 15971, 15973, 15991, 16001, 16007, 16033, 16057, 16061, 16063, 16067, 16069, 16073, 16087, 16091, 16097, 16103, 16111, 16127, 16139, 16141, 16183, 16187, 16189, 16193, 16217, 16223, 16229, 16231, 16249, 16253, 16267, 16273, 16301, 16319, 16333, 16339, 16349, 16361, 16363, 16369, 16381, 16411, 16417, 16421, 16427, 16433, 16447, 16451, 16453, 16477, 16481, 16487, 16493, 16519, 16529, 16547, 16553, 16561, 16567, 16573, 16603, 16607, 16619, 16631, 16633, 16649, 16651, 16657, 16661, 16673, 16691, 16693, 16699, 16703, 16729, 16741, 16747, 16759, 16763, 16787, 16811, 16823, 16829, 16831];
 
+	// Set the hash table dimensions
+	const hashSize = hashTableFillFactor*excludeCount;
 	const hashSqrt = Math.ceil(Math.sqrt(hashSize));
 	if (hashSqrt > primes[primes.length-2]) {
 	    // We can't use values bigger than 16777216
@@ -856,6 +845,22 @@ class AtomTextureData {
 	console.log(`There are ${excludeCount} active exclusions`);
 	const hashLoadPercent = 100.0*excludeCount/this.hashDim.size;
 	console.log(`Hash table load: ${hashLoadPercent.toFixed(2)}%`);
+    }
+    
+    makeHashTable(width, height) {
+	// Optimize the hash table parameters for the least collisions
+	const hashTableAttempts = 10;
+	this.stopCollisions = 20; // Don't allow more than some number of collisions
+
+	// Create a new hash table size
+	if (width == null || height == null) {
+	    this.sizeHashTable();
+	}
+	
+	// Note that "primes" (used for the hash table texture dimensions) and "bigPrimes" (used for the multipliers)
+	// must be disjoint. (a == m is bad for the linear congruential generator).
+	// Also, 991*16381 < 2^24 (needed for exact handling of integers with 32-bit floats)
+	const bigPrimes = [15013, 15017, 15031, 15053, 15061, 15073, 15077, 15083, 15091, 15101, 15107, 15121, 15131, 15137, 15139, 15149, 15161, 15173, 15187, 15193, 15199, 15217, 15227, 15233, 15241, 15259, 15263, 15269, 15271, 15277, 15287, 15289, 15299, 15307, 15313, 15319, 15329, 15331, 15349, 15359, 15361, 15373, 15377, 15383, 15391, 15401, 15413, 15427, 15439, 15443, 15451, 15461, 15467, 15473, 15493, 15497, 15511, 15527, 15541, 15551, 15559, 15569, 15581, 15583, 15601, 15607, 15619, 15629, 15641, 15643, 15647, 15649, 15661, 15667, 15671, 15679, 15683, 15727, 15731, 15733, 15737, 15739, 15749, 15761, 15767, 15773, 15787, 15791, 15797, 15803, 15809, 15817, 15823, 15859, 15877, 15881, 15887, 15889, 15901, 15907, 15913, 15919, 15923, 15937, 15959, 15971, 15973, 15991, 16001, 16007, 16033, 16057, 16061, 16063, 16067, 16069, 16073, 16087, 16091, 16097, 16103, 16111, 16127, 16139, 16141, 16183, 16187, 16189, 16193, 16217, 16223, 16229, 16231, 16249, 16253, 16267, 16273, 16301, 16319, 16333, 16339, 16349, 16361, 16363, 16369, 16381, 16411, 16417, 16421, 16427, 16433, 16447, 16451, 16453, 16477, 16481, 16487, 16493, 16519, 16529, 16547, 16553, 16561, 16567, 16573, 16603, 16607, 16619, 16631, 16633, 16649, 16651, 16657, 16661, 16673, 16691, 16693, 16699, 16703, 16729, 16741, 16747, 16759, 16763, 16787, 16811, 16823, 16829, 16831];
 
 	// The hash table will store the exclusions in a (atomIndex0 atomIndex1 epsilon Rmin)
 	// With atomIndex0 < atomIndex1
@@ -864,8 +869,8 @@ class AtomTextureData {
 	let bestCollisions = this.stopCollisions;
 	let worstCollisions = 0;
 	let sumCollisions = 0;
-	
-	// Make sure the hash function multipliers fit in a 32-bit float
+
+	// Optimize the hash table parameters for the least collisionsp
 	for (let i = 0; i < hashTableAttempts; i++) {
 	    // Select random hash function factors
 	    const pi0 = Math.floor(bigPrimes.length*Math.random());
