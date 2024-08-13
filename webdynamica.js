@@ -93,7 +93,7 @@
 
     class MDTextures {
 	constructor(gl, atomTexData, shaders, simSys) {
-	    // Store the dimensions here also
+	    // Store the texture dimensions here also
 	    this.width = atomTexData.width;
 	    this.height = atomTexData.height;
 	    this.size = this.width*this.height;
@@ -102,13 +102,19 @@
 	    this.angleDim = atomTexData.angleDim;
 	    this.dihedralDim = atomTexData.dihedralDim;
 	    this.excludeDim = atomTexData.excludeDim;
-	    	    
+	    this.hashDim = atomTexData.hashDim;
+
+	    // Hash function (linear congruential generator) multipliers
+	    this.hashA = atomTexData.hashA;
+	    
 	    // Force field textures
 	    this.bond = createTexture(gl, atomTexData.bond, atomTexData.bondDim);
 	    this.angle = createTexture(gl, atomTexData.angle, atomTexData.angleDim);
 	    this.dihedral = createTexture(gl, atomTexData.dihedral, atomTexData.dihedralDim);
 	    this.exclude = createTexture(gl, atomTexData.exclude, atomTexData.excludeDim);
 	    this.nonbond = createTexture(gl, atomTexData.nonbond, atomTexData);
+	    // Hash table for exclusions and special L-J interactions
+	    this.hash = createTexture(gl, atomTexData.hash, atomTexData.hashDim);
 
 	    // Restraint texture
 	    this.restrain = createTexture(gl, atomTexData.restrain, atomTexData);
@@ -507,7 +513,7 @@
     }
 
     // Calculate the atomic forces using a shader
-    function runForceShader(env, posTex, destForceFrameBuffer) {
+    function runForceShader(env, posTex, destForceFrameBuffer, fast = false) {
 	const gl = env.gl; // WebGL context
 	const textures = env.textures; // MDTextures object
 	const shaders = env.shaders; // MDShaders object
@@ -524,10 +530,9 @@
 	const nonbondIndex = 4;
 	const restrainIndex = 5;
 	const posIndex = 6;
+	const hashIndex = 7;
 	
 	// Bind the textures
-	gl.activeTexture(gl.TEXTURE0 + posIndex);
-	gl.bindTexture(gl.TEXTURE_2D, posTex);
 	gl.activeTexture(gl.TEXTURE0 + bondIndex);
 	gl.bindTexture(gl.TEXTURE_2D, textures.bond);
 	gl.activeTexture(gl.TEXTURE0 + angleIndex);
@@ -540,25 +545,43 @@
 	gl.bindTexture(gl.TEXTURE_2D, textures.nonbond);
 	gl.activeTexture(gl.TEXTURE0 + restrainIndex);
 	gl.bindTexture(gl.TEXTURE_2D, textures.restrain);
+	gl.activeTexture(gl.TEXTURE0 + posIndex);
+	gl.bindTexture(gl.TEXTURE_2D, posTex);
+	gl.activeTexture(gl.TEXTURE0 + hashIndex);
+	gl.bindTexture(gl.TEXTURE_2D, textures.hash);
 
+	// Do we use the fast shader with near cutoff?
+	let locs = null;
+	let prog = null;
+	if (fast) {
+	    prog = shaders.forceFast;
+	    locs = shaders.forceFastLocs;
+	} else {
+	    prog = shaders.force;
+	    locs = shaders.forceLocs;
+	}
+	
 	// Draw to the unit square 
 	gl.bindBuffer(gl.ARRAY_BUFFER, textures.unitSquareBuffer);
-	gl.enableVertexAttribArray(shaders.forceLocs.dummy);
-	gl.vertexAttribPointer(shaders.forceLocs.dummy, 2, gl.FLOAT, false, 0, 0);
+	gl.enableVertexAttribArray(locs.dummy);
+	gl.vertexAttribPointer(locs.dummy, 2, gl.FLOAT, false, 0, 0);
 
 	// Run the force calculation
-	gl.useProgram(shaders.force);
-	gl.uniform1i(shaders.forceLocs.posTex, posIndex);
-	gl.uniform1i(shaders.forceLocs.nonbondTex, nonbondIndex);
-	gl.uniform1i(shaders.forceLocs.bondTex, bondIndex);
-	gl.uniform1i(shaders.forceLocs.angleTex, angleIndex);
-	gl.uniform1i(shaders.forceLocs.dihedralTex, dihedralIndex);
-	gl.uniform1i(shaders.forceLocs.excludeTex, excludeIndex);
-	gl.uniform1i(shaders.forceLocs.restrainTex, restrainIndex);
-	gl.uniform3f(shaders.forceLocs.box, ...env.simSys.box);
-	gl.uniform3f(shaders.forceLocs.wall, ...env.simSys.wall);
-	gl.uniform1f(shaders.forceLocs.wallSpring, env.simSys.wallSpring);
-	gl.uniform1f(shaders.forceLocs.coulomb, env.simSys.coulomb);
+	gl.useProgram(prog);
+	gl.uniform1i(locs.bondTex, bondIndex);
+	gl.uniform1i(locs.angleTex, angleIndex);
+	gl.uniform1i(locs.dihedralTex, dihedralIndex);
+	gl.uniform1i(locs.excludeTex, excludeIndex);
+	gl.uniform1i(locs.nonbondTex, nonbondIndex);
+	gl.uniform1i(locs.posTex, posIndex);
+	gl.uniform1i(locs.hashTex, hashIndex);
+	gl.uniform1f(locs.hashA0, textures.hashA[0]);
+	gl.uniform1f(locs.hashA1, textures.hashA[1]);
+	gl.uniform1i(locs.restrainTex, restrainIndex);
+	gl.uniform3f(locs.box, ...env.simSys.box);
+	gl.uniform3f(locs.wall, ...env.simSys.wall);
+	gl.uniform1f(locs.wallSpring, env.simSys.wallSpring);
+	gl.uniform1f(locs.coulomb, env.simSys.coulomb);
 	gl.drawArrays(gl.TRIANGLES, 0, 6);  // Draw 2 triangles (6 vertices)
     }
 
@@ -1478,7 +1501,8 @@
 	    const stepScale = Math.pow(minStepSize, 1.0/steps);
 	    for (let i = 0; i < steps; i++) {
 		// Calculate the forces
-		runForceShader(env, currTexInfo.pos, textures.forceFB);
+		// false: We use the slower version for minimization since there is no near cutoff
+		runForceShader(env, currTexInfo.pos, textures.forceFB, false);
 		// Take a step downhill
 		runDownhillShader(env, currTexInfo.pos, textures.force, stepSize, nextTexInfo.posFB);
 		// Swap to the next positions
@@ -1587,6 +1611,7 @@
 	let runSteps = 20;
 	const analysisFrames = 20;
 	let selectStatusTime = performance.now();
+	let sumSimTime = 0.0;
 
 	// 2D canvas for molecule identification
 	const selectContext2d = document.getElementById('selectCanvas').getContext('2d');
@@ -1620,8 +1645,9 @@
 		    runUpdatePositionShader(env, currTexInfo.pos, textures.halfVel, nextTexInfo.posFB);
 		    
     		    // Calculate the new forces
-    		    // F(t + dt) = f(r(t+dt)) 
-    		    runForceShader(env, nextTexInfo.pos, textures.forceFB);
+    		    // F(t + dt) = f(r(t+dt))
+		    // true: fast version for dynamics
+   		    runForceShader(env, nextTexInfo.pos, textures.forceFB, true);
 
 		    // Second half-kick
 		    if (thermostatOn) {
@@ -1644,6 +1670,8 @@
 		    dynamicsStep++;
 		} // Run multiple step loop
 	    }
+	    // Sum the amount of time just running the simulation loop
+	    sumSimTime += performance.now() - frameStartTime;
 
 	    // At the beginning of the simulation, reset the velocities after a relaxation 
 	    if (frame == analysisFrames-1) {
@@ -1659,17 +1687,22 @@
 		const t = performance.now();
 		const totalTime = t - lastTime;
 		const totalSteps = step - lastStep;
-		const stepTime = totalTime/totalSteps;
-		const totalPerf = 86.4*simSys.timestep/stepTime; // ns/day
+		const stepTime = sumSimTime/totalSteps;
+		const runPerf = 86.4*simSys.timestep/stepTime; // ns/day
+		const totalPerf = 86.4*simSys.timestep/(totalTime/totalSteps); // ns/day
+		const totalPerfPs = 86.4*simSys.timestep/(totalTime/totalSteps)/1.44 // ps/min
 		const framesPerSecond = 1000.0*analysisFrames/totalTime;
 		lastTime = t;
 		lastStep = step;
+		sumSimTime = 0.0;
 
 		// Set the performance text
 		let statusText = "";
 		if (totalSteps > 0) {
 		    statusText += `Time per simulation step: ${stepTime.toFixed(5)} ms`;
+		    statusText += `<br>Total performance: ${totalPerfPs.toFixed(2)} ps/min`;
 		    statusText += `<br>Total performance: ${totalPerf.toFixed(2)} ns/day`;
+		    statusText += `<br>Simulation performance: ${runPerf.toFixed(2)} ns/day`;
 		}
 		statusText += `<br>Framerate: ${framesPerSecond.toFixed(2)} 1/s`;
 		statusText += `<br>Steps per frame: ${runSteps}`;
@@ -1697,8 +1730,8 @@
 		if (currState != SimState.none) {
 		    if (framesPerSecond < 20.0) {
 			runSteps = Math.ceil(runSteps*framesPerSecond/20.0);
-		    } else if (framesPerSecond > 35.0) {
-			runSteps = Math.ceil(runSteps*framesPerSecond/35.0);
+		    } else if (framesPerSecond > 25.0) {
+			runSteps = Math.ceil(runSteps*framesPerSecond/25.0);
 		    }
 		    // Put some kind of sane limits on runSteps
 		    if (runSteps < 2) {

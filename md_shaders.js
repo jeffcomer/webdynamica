@@ -30,16 +30,15 @@
 // Brooks et al. (1984) Stochastic boundary conditions for molecular dynamics simulations of ST2 water. Chem. Phys. Lett. 105(5), 495–500. DOI: 10.1016/0009-2614(84)80098-6
 // I'm purposely not indenting here to make editing the shaders easier
 class MDShaders {
-constructor(gl, atomTexData, atomMinDist, atomMaxDisplace, forceSplit = 500.0) {
+    constructor(gl, atomTexData, atomMinDist, atomMaxDisplace) {
 this.SPHERE_VERTICES = 39; // Our simple half-sphere model
 this.ATOM_MIN_DIST = atomMinDist.toFixed(1);
 // Typically, the maximum displacement should be a few times bigger than
 // units 'sqrt(k*370*K/(hydrogen*u))' 'Å/fs' = 0.01747031
 this.ATOM_MAX_DISPLACE = atomMaxDisplace.toFixed(1);
-this.FORCE_SPLIT = forceSplit.toFixed(1);
-// Force and energy should be in different units, but it works well numerically
-this.ENERGY_SPLIT = forceSplit.toFixed(1); 
-
+//this.nonbondForceFunction = nonbondForceFunction;
+this.EXCLUDE_FACTOR = 0.55; // nonbondForceNearCutoff excludes forces where dist <= 0.55*RMix
+	
 console.log('MDShaders texture size:',atomTexData.width, atomTexData.height);
 // Texture dimension strings
 this.ATOM_TEX_WIDTH = atomTexData.width.toFixed(1);
@@ -57,10 +56,16 @@ this.EXCLUDE_TEX_WIDTH = atomTexData.excludeDim.width.toFixed(1);
 this.EXCLUDE_TEX_HEIGHT = atomTexData.excludeDim.height.toFixed(1);
 this.EXCLUDE_TERMS_PER_ATOM = atomTexData.excludeDim.termsPerAtom.toFixed(1);
 
+// Exclusion hash table    
+this.HASH_TEX_WIDTH = atomTexData.hashDim.width.toFixed(1);
+this.HASH_TEX_HEIGHT = atomTexData.hashDim.height.toFixed(1);
+this.HASH_MAX_COLLISIONS = atomTexData.maxCollisions.toFixed(1);
+console.log('HASH_MAX_COLLISIONS', this.HASH_MAX_COLLISIONS);
+    
 // Linear congruential generator parameters from
 // Pierre L'Ecuyer (1999) Mathematics of Computation, 68(225):249–260
 // https://www.ams.org/journals/mcom/1999-68-225/S0025-5718-99-00996-5/
-// We choose with small enough moduli (m) and multipliers (a) that 
+// We choose with small enough divisors (m) and multipliers (a) that 
 // exact integer math with 32-bit floats is possible
 this.RAND_M0 = 32749;
 this.RAND_A0 = 209;
@@ -70,6 +75,7 @@ this.RAND_M2 = 16381;
 this.RAND_A2 = 572;
 this.RAND_M3 = 8191;
 this.RAND_A3 = 1716;
+
 
 // Render the atoms using a half-sphere model with 13 triangles
 this.drawSpheresVS = `
@@ -756,7 +762,10 @@ uniform sampler2D bondTex;
 uniform sampler2D angleTex;
 uniform sampler2D dihedralTex;
 uniform sampler2D excludeTex;
-uniform sampler2D restrainTex;
+uniform sampler2D restrainTex; 
+uniform sampler2D hashTex; // hash table for exclusions
+uniform float hashA0;
+uniform float hashA1;
 uniform vec3 box;
 uniform vec3 wall;
 uniform float wallSpring;
@@ -766,8 +775,7 @@ uniform float coulomb;
 #define ATOM_TEX_HEIGHT ${this.ATOM_TEX_HEIGHT}
 #define ATOM_MAX_DISPLACE ${this.ATOM_MAX_DISPLACE}
 #define ATOM_MIN_DIST ${this.ATOM_MIN_DIST}
-#define FORCE_SPLIT ${this.FORCE_SPLIT}
-#define ENERGY_SPLIT ${this.ENERGY_SPLIT}
+#define EXCLUDE_FACTOR ${this.EXCLUDE_FACTOR}
 
 #define BOND_TEX_WIDTH ${this.BOND_TEX_WIDTH}
 #define BOND_TEX_HEIGHT ${this.BOND_TEX_HEIGHT}
@@ -781,6 +789,10 @@ uniform float coulomb;
 #define EXCLUDE_TEX_WIDTH ${this.EXCLUDE_TEX_WIDTH}
 #define EXCLUDE_TEX_HEIGHT ${this.EXCLUDE_TEX_HEIGHT}
 #define EXCLUDE_TERMS_PER_ATOM ${this.EXCLUDE_TERMS_PER_ATOM}
+
+#define HASH_TEX_WIDTH ${this.HASH_TEX_WIDTH}
+#define HASH_TEX_HEIGHT ${this.HASH_TEX_HEIGHT}
+#define HASH_MAX_COLLISIONS ${this.HASH_MAX_COLLISIONS}
 
 #define PI 3.14159265358979323846
 
@@ -796,10 +808,239 @@ vec2 atomTextureCoords(float atomIndex) {
   return vec2(texX, texY);
 }
 
+// This function is necessary because the built-in mod()
+// sometimes gives x % m == m, even for x and m < 2^24
+// due to floating-point error
+float checkMod(float dividend, float divisor) {
+  float res = mod(dividend, divisor);
+  return (res < divisor) ? res : (res - divisor);
+}
+
+// Apply the hash function
+vec2 nextHash(float i0, float i1) {
+  float ret0 = checkMod(i0*hashA0, HASH_TEX_WIDTH);
+  float ret1 = checkMod(i1*hashA1, HASH_TEX_HEIGHT);
+  return vec2(ret0, ret1);
+}
+
+// Apply the hash function to the raw atom indices
+// We need to make sure that the atom indices are appropriate for
+// the linear congruential generator
+vec2 startHash(float atomIndex0, float atomIndex1) {
+  // Make sure we have good starting numbers (x % HASH_TEX_WIDTH == 0 is bad)
+  float i0 = checkMod(atomIndex0, HASH_TEX_WIDTH - 1.0) + 1.0;
+  float i1 = checkMod(atomIndex1, HASH_TEX_HEIGHT - 1.0) + 1.0;
+  return nextHash(i0, i1);
+}
+
+// Calculate the coordinates in the hash texture from the hash function values
+vec2 hashTextureCoords(float i0, float i1) {
+  float texX = (i0 + 0.5)/HASH_TEX_WIDTH;
+  float texY = (i1 + 0.5)/HASH_TEX_HEIGHT;
+  return vec2(texX, texY);
+}
+
 
 ////////////////////////////////////////////////////////////////
-// Forces for Lennard-Jones, Coulomb, and exclusions
+// Forces for Lennard-Jones, Coulomb, and exclusions/special LJ
+// Here we handle the exclusions using a hash table.
+// We know the maximum number of collisions in the hash table
+// among all exclusions, allowing the SIMD search to be short.
+// Note that all pairs of atoms need to do the worst-case search
+// owing to the SIMD paradigm. Hence, it's a good idea to 
+// optimize the hash table to minimize the maximum number of
+// collisions.
+//
+// The nonbonded parameter texture (nonbondTex) has the format:
+// {x: mass, y: charge, z: epsilon_LJ, w: RMin_LJ}
+// The exclusion texture (excludeTex) has the format:
+// {x: partner atom index, y: unused, z: epsilon_LJ, w: RMin_LJ}
+//
+// epsilon_LJ = 0.0,  RMin_LJ = -1.0 is a real exclusion (LJ & Coulomb removed)
+// epsilon_LJ = 0.0,  RMin_LJ = 0.0 is an inactive exclusion (does nothing)
+// Other values represent special LJ (1-4 or bespoke); Coulomb should be normal 
+vec4 nonbondForceHash(vec4 posActive0, vec2 posTexCoord) {
+  // Position of this atom
+  vec3 pos0 = posActive0.xyz;
+  float atomIndex0 = floor(gl_FragCoord.x) + floor(gl_FragCoord.y)*ATOM_TEX_WIDTH;
+
+  // Nonbonded parameters for this atom (same dimensions as position)
+  // {x: mass, y: charge, z: epsilon_LJ, w: RMin_LJ}
+  vec4 nonbondPar0 = texture2D(nonbondTex, posTexCoord);
+
+  float energy = 0.0;
+  vec3 force = vec3(0);
+     
+  ////////////////////////////////////////////////////////////////
+  // All pairs Coulomb and Lennard-Jones force calculation
+  // We loop over all pixels in the position texture
+  for (float ix = 0.0; ix < ATOM_TEX_WIDTH; ix+=1.0) {
+    for (float iy = 0.0; iy < ATOM_TEX_HEIGHT; iy+=1.0) {
+      // Get the texture coordinates of the other atom
+      float texX = (ix + 0.5) / ATOM_TEX_WIDTH;
+      float texY = (iy + 0.5) / ATOM_TEX_HEIGHT;
+      float atomIndex1 = ix + iy*ATOM_TEX_WIDTH;
+
+      // Get the position of the other atom
+      vec4 posActive1 = texture2D(posTex, vec2(texX, texY));
+      vec3 pos1 = posActive1.xyz;
+
+      // Get the nonbonded parameters of the other atom
+      vec4 nonbondPar1 = texture2D(nonbondTex, vec2(texX, texY));
+      // Lorentz-Berthelot mixing rules
+      float epsMix = sqrt(nonbondPar0.z*nonbondPar1.z);
+      float RMix = 0.5*(nonbondPar0.w + nonbondPar1.w);
+
+      // Check for exclusions or special Lennard-Jones parameters
+      // The hash table will include the special L-J parameters
+      // or eps == 0.0 and RMin == -1.0 for a real exclusion
+      // Hash table is indexed with atom0 < atom1
+      float atom0 = min(atomIndex0, atomIndex1); 
+      float atom1 = max(atomIndex0, atomIndex1);
+
+      // Check the first hash table entry
+      vec2 hashValues = startHash(atom0, atom1);
+      vec2 hashCoords = hashTextureCoords(hashValues.x, hashValues.y);
+      vec4 hashPar = texture2D(hashTex, hashCoords);
+      if (hashPar.x == atom0 && hashPar.y == atom1) {
+         epsMix = hashPar.z;
+         RMix = hashPar.w;
+      }
+  
+      // Keep searching the hash table in case there is a collision
+      for (float collide = 0.0; collide < HASH_MAX_COLLISIONS; collide += 1.0) {
+	 // Hash the last hash function result
+         hashValues = nextHash(hashValues.x, hashValues.y);
+         hashCoords = hashTextureCoords(hashValues.x, hashValues.y);
+         hashPar = texture2D(hashTex, hashCoords);
+         if (hashPar.x == atom0 && hashPar.y == atom1) {
+           epsMix = hashPar.z;
+           RMix = hashPar.w;
+         }
+      }
+
+      // Don't include excluded atoms or self-interaction or inactive atoms
+      // RMix = -1.0 for real exclusion
+      if (RMix != -1.0 && atomIndex1 != atomIndex0 && posActive0.w != 0.0 && posActive1.w != 0.0) {
+        // Get the separation vector and distance
+        vec3 del = wrap(pos1 - pos0, box);
+        float dist = length(del);
+
+	float dist2 = dot(del,del);
+	float dist3 = dist*dist2;
+	float ratio = pow(RMix*RMix/dist2, 3.0);
+
+	// Calculate the Coulomb and Lennard-Jones forces
+	force += 12.0*epsMix*ratio*(1.0 - ratio)/dist2 * del;
+        force += -coulomb*nonbondPar0.y*nonbondPar1.y/dist3 * del;
+        // The 0.5 is because this energy is shared between two atoms
+        energy += 0.5*(epsMix*ratio*(ratio - 2.0) + coulomb*nonbondPar0.y*nonbondPar1.y/dist);
+      }
+    }
+  }
+  return vec4(force, energy);
+}
+
+
+////////////////////////////////////////////////////////////////
+// Forces for Lennard-Jones, Coulomb, and exclusions/special LJ
+// Here we handle the exclusions using a hash table.
+// WARNING! It's hard coded for one collision at most!
+//
+// The nonbonded parameter texture (nonbondTex) has the format:
+// {x: mass, y: charge, z: epsilon_LJ, w: RMin_LJ}
+// The exclusion texture (excludeTex) has the format:
+// {x: partner atom index, y: unused, z: epsilon_LJ, w: RMin_LJ}
+//
+// epsilon_LJ = 0.0,  RMin_LJ = -1.0 is a real exclusion (LJ & Coulomb removed)
+// epsilon_LJ = 0.0,  RMin_LJ = 0.0 is an inactive exclusion (does nothing)
+// Other values represent special LJ (1-4 or bespoke); Coulomb should be normal 
+vec4 nonbondForceHashOne(vec4 posActive0, vec2 posTexCoord) {
+  // Position of this atom
+  vec3 pos0 = posActive0.xyz;
+  float atomIndex0 = floor(gl_FragCoord.x) + floor(gl_FragCoord.y)*ATOM_TEX_WIDTH;
+
+  // Nonbonded parameters for this atom (same dimensions as position)
+  // {x: mass, y: charge, z: epsilon_LJ, w: RMin_LJ}
+  vec4 nonbondPar0 = texture2D(nonbondTex, posTexCoord);
+
+  float energy = 0.0;
+  vec3 force = vec3(0);
+     
+  ////////////////////////////////////////////////////////////////
+  // All pairs Coulomb and Lennard-Jones force calculation
+  // We loop over all pixels in the position texture
+  for (float ix = 0.0; ix < ATOM_TEX_WIDTH; ix+=1.0) {
+    for (float iy = 0.0; iy < ATOM_TEX_HEIGHT; iy+=1.0) {
+      // Get the texture coordinates of the other atom
+      float texX = (ix + 0.5) / ATOM_TEX_WIDTH;
+      float texY = (iy + 0.5) / ATOM_TEX_HEIGHT;
+      float atomIndex1 = ix + iy*ATOM_TEX_WIDTH;
+
+      // Get the position of the other atom
+      vec4 posActive1 = texture2D(posTex, vec2(texX, texY));
+      vec3 pos1 = posActive1.xyz;
+
+      // Get the nonbonded parameters of the other atom
+      vec4 nonbondPar1 = texture2D(nonbondTex, vec2(texX, texY));
+      // Lorentz-Berthelot mixing rules
+      float epsMix = sqrt(nonbondPar0.z*nonbondPar1.z);
+      float RMix = 0.5*(nonbondPar0.w + nonbondPar1.w);
+
+      // Check for exclusions or special Lennard-Jones parameters
+      // The hash table will include the special L-J parameters
+      // or eps == 0.0 and RMin == -1.0 for a real exclusion
+      // Hash table is indexed with atom0 < atom1
+      float atom0 = min(atomIndex0, atomIndex1); 
+      float atom1 = max(atomIndex0, atomIndex1);
+
+      // Check the first hash table entry
+      vec2 hashValues = startHash(atom0, atom1);
+      vec2 hashCoords = hashTextureCoords(hashValues.x, hashValues.y);
+      vec4 hashPar = texture2D(hashTex, hashCoords);
+      if (hashPar.x == atom0 && hashPar.y == atom1) {
+         epsMix = hashPar.z;
+         RMix = hashPar.w;
+      }
+
+      // In case of one collision:
+      // Hash the last hash function result
+      hashValues = nextHash(hashValues.x, hashValues.y);
+      hashCoords = hashTextureCoords(hashValues.x, hashValues.y);
+      hashPar = texture2D(hashTex, hashCoords);
+      if (hashPar.x == atom0 && hashPar.y == atom1) {
+        epsMix = hashPar.z;
+        RMix = hashPar.w;
+      }
+
+      // Don't include excluded atoms or self-interaction or inactive atoms
+      // RMix = -1.0 for real exclusion
+      if (RMix != -1.0 && atomIndex1 != atomIndex0 && posActive0.w != 0.0 && posActive1.w != 0.0) {
+        // Get the separation vector and distance
+        vec3 del = wrap(pos1 - pos0, box);
+        float dist = length(del);
+
+	float dist2 = dot(del,del);
+	float dist3 = dist*dist2;
+	float ratio = pow(RMix*RMix/dist2, 3.0);
+
+	// Calculate the Coulomb and Lennard-Jones forces
+	force += 12.0*epsMix*ratio*(1.0 - ratio)/dist2 * del;
+        force += -coulomb*nonbondPar0.y*nonbondPar1.y/dist3 * del;
+        // The 0.5 is because this energy is shared between two atoms
+        energy += 0.5*(epsMix*ratio*(ratio - 2.0) + coulomb*nonbondPar0.y*nonbondPar1.y/dist);
+      }
+    }
+  }
+  return vec4(force, energy);
+}
+
+
+////////////////////////////////////////////////////////////////
+// Forces for Lennard-Jones, Coulomb, and exclusions/special LJ
 // Here we handle the exclusions with a conditional
+// This is the slowest of the approaches since it has to check 
+// all of the exclusion texture slots for each pair of atoms
 //
 // The nonbonded parameter texture (nonbondTex) has the format:
 // {x: mass, y: charge, z: epsilon_LJ, w: RMin_LJ}
@@ -887,11 +1128,13 @@ vec4 nonbondForceExclude(vec4 posActive0, vec2 posTexCoord) {
 }
 
 
+
 ////////////////////////////////////////////////////////////////
-// Forces for Lennard-Jones, Coulomb, and exclusions
+// Forces for Lennard-Jones, Coulomb, and exclusions/special LJ
 // Here, excluded interactions are subtracted off in the second stage
-// To avoid loss of precision due to large excluded forces,
-// the forces are split into forceNeg, forceMed, forcePos
+// This is the fastest method for full long-range interactions
+// Unfortunately, the large magnitude excluded forces lead to loss of 
+// precision in the non-excluded forces
 //
 // The nonbonded parameter texture (nonbondTex) has the format:
 // {x: mass, y: charge, z: epsilon_LJ, w: RMin_LJ}
@@ -901,209 +1144,7 @@ vec4 nonbondForceExclude(vec4 posActive0, vec2 posTexCoord) {
 // epsilon_LJ = 0.0,  RMin_LJ = -1.0 is a real exclusion (LJ & Coulomb removed)
 // epsilon_LJ = 0.0,  RMin_LJ = 0.0 is an inactive exclusion (does nothing)
 // Other values represent special LJ (1-4 or bespoke); Coulomb should be normal 
-vec4 nonbondForce(vec4 posActive0, vec2 posTexCoord) {
-  // Position of this atom
-  vec3 pos0 = posActive0.xyz;
-  float atomIndex0 = floor(gl_FragCoord.x) + floor(gl_FragCoord.y)*ATOM_TEX_WIDTH;
-
-  // Nonbonded parameters for this atom (same dimensions as position)
-  // {x: mass, y: charge, z: epsilon_LJ, w: RMin_LJ}
-  vec4 nonbondPar0 = texture2D(nonbondTex, posTexCoord);
-
-  // Summing these separately typically reduces numerical error in the energy
-  float energy12 = 0.0;
-  float energy12Big = 0.0;
-  float energy6 = 0.0;
-  float energyCoulomb = 0.0;
-
-  // Splitting the forces in into different sums, we can the error in the force by a factor of 2!
-  vec3 forceNeg = vec3(0);
-  vec3 forceMed = vec3(0);
-  vec3 forcePos = vec3(0);
-  vec3 forceCoulomb = vec3(0);
-     
-  ////////////////////////////////////////////////////////////////
-  // All pairs Coulomb and Lennard-Jones force calculation
-  // We loop over all pixels in the position texture
-  // We do this blindly, ignoring exclusions (including special 1-4 and bespoke)
-  // These forces are later subtracted below in these cases
-  // Self-interactions are zero due to atomIndex comparison
-  for (float ix = 0.0; ix < ATOM_TEX_WIDTH; ix+=1.0) {
-    for (float iy = 0.0; iy < ATOM_TEX_HEIGHT; iy+=1.0) {
-      // Get the texture coordinates of the other atom
-      float texX = (ix + 0.5) / ATOM_TEX_WIDTH;
-      float texY = (iy + 0.5) / ATOM_TEX_HEIGHT;
-      float atomIndex1 = ix + iy*ATOM_TEX_WIDTH;
-
-      // Get the position of the other atom
-      vec4 posActive1 = texture2D(posTex, vec2(texX, texY));
-      vec3 pos1 = posActive1.xyz;
-
-      // Get the nonbonded parameters of the other atom
-      vec4 nonbondPar1 = texture2D(nonbondTex, vec2(texX, texY));
-      // Lorentz-Berthelot mixing rules
-      float epsMix = sqrt(nonbondPar0.z*nonbondPar1.z);
-      float RMix = 0.5*(nonbondPar0.w + nonbondPar1.w);
-
-      // Get the separation vector and distance
-      vec3 del = wrap(pos1 - pos0, box);
-      float dist = length(del);
-
-      // The conditional is to avoid infinities from self-interaction or inactive atoms
-      if (atomIndex1 != atomIndex0 && posActive0.w != 0.0 && posActive1.w != 0.0) {
-	float dist2 = dot(del,del);
-	float dist3 = dist*dist2;
-	float ratio = pow(RMix*RMix/dist2, 3.0);
-
-	// Calculate the Coulomb and Lennard-Jones forces
-	vec3 f = 12.0*epsMix*ratio*(1.0 - ratio)/dist2 * del;
-        forceCoulomb -= coulomb*nonbondPar0.y*nonbondPar1.y/dist3 * del;
-
-        // Splitting into different components significantly reduces numerical error
-        if (f.x < -FORCE_SPLIT) {
-           forceNeg.x += f.x;
-        } else if (f.x > FORCE_SPLIT) {
-           forcePos.x += f.x;
-        } else {
-           forceMed.x += f.x;
-        }
-        if (f.y < -FORCE_SPLIT) {
-           forceNeg.y += f.y;
-        } else if (f.y > FORCE_SPLIT) {
-           forcePos.y += f.y;
-        } else {
-           forceMed.y += f.y;
-        }
-        if (f.z < -FORCE_SPLIT) {
-           forceNeg.z += f.z;
-        } else if (f.z > FORCE_SPLIT) {
-           forcePos.z += f.z;
-        } else {
-           forceMed.z += f.z;
-        }
-
-	// We share this energy equally among the atoms, hence the 1/2
-        // Splitting the energy into 12, 6, and Coulomb components improves numerics
-        float e12 = 0.5*epsMix*ratio*ratio;
-        if (e12 > ENERGY_SPLIT) {
-           energy12Big += e12;
-        } else {
-           energy12 += e12;
-        }
-        energy6 += -epsMix*ratio;
-        energyCoulomb += 0.5*coulomb*nonbondPar0.y*nonbondPar1.y/dist;
-      }
-    }
-  }
-
-  ////////////////////////////////////////////////////////////////
-  // Exclusion calculation
-  // This includes special 1-4 and bespoke LJ parameters
-  float excludeStart = posTexCoord.x - 1.0/(2.0*ATOM_TEX_WIDTH) + 1.0/(2.0*EXCLUDE_TEX_WIDTH);
-  for (float ix = 0.0; ix < EXCLUDE_TERMS_PER_ATOM; ix+=1.0) {
-    float excludeTexX = excludeStart + ix/EXCLUDE_TEX_WIDTH;
-    vec4 exclude = texture2D(excludeTex, vec2(excludeTexX, posTexCoord.y));
-    float atomIndex1 = exclude.x;
-    float epsSpecial = exclude.z; 
-    float RSpecial = exclude.w;
-
-    // Get the position of the partner atom
-    vec2 posTexCoord1 = atomTextureCoords(atomIndex1);
-    vec4 posActive1 = texture2D(posTex, posTexCoord1);
-    vec3 pos1 = posActive1.xyz;
-
-    // The signature for a real exclusion is eps=0.0, RMin=-1.0
-    float realExclude = (epsSpecial == 0.0 && RSpecial == -1.0) ? 1.0 : 0.0;
-
-    // We need to recalculate the standard LJ so we can subtract it
-    // Get the nonbonded parameters of the other atom
-    vec4 nonbondPar1 = texture2D(nonbondTex, posTexCoord1);
-    // Lorentz-Berthelot mixing rules
-    float epsMix = sqrt(nonbondPar0.z*nonbondPar1.z);
-    float RMix = 0.5*(nonbondPar0.w + nonbondPar1.w);
-         
-    // Get the separation vector and distance
-    vec3 del = wrap(pos1 - pos0, box);
-    float dist = length(del);
-
-    // The conditional is to avoid infinities from self-interaction or inactive atoms
-    // RSpecial checks if this an active exclusion, or just all zeros?
-    if (RSpecial != 0.0 && posActive0.w != 0.0 && posActive1.w != 0.0) {
-      float dist2 = dot(del,del);
-      float dist3 = dist*dist2;
-      float ratio = pow(RMix*RMix/dist2, 3.0);
-
-      // Calculate the Coulomb and Lennard-Jones forces to subtract
-      // The conditional is to avoid the self-interaction (or maybe clashes)
-      vec3 fc = -12.0*epsMix*ratio*(1.0 - ratio)/dist2 * del;
-      // Splitting into different components significantly reduces numerical error
-      if (fc.x < -FORCE_SPLIT) {
-          forceNeg.x += fc.x;
-      } else if (fc.x > FORCE_SPLIT) {
-          forcePos.x += fc.x;
-      } else {
-          forceMed.x += fc.x;
-      }
-      if (fc.y < -FORCE_SPLIT) {
-         forceNeg.y += fc.y;
-      } else if (fc.y > FORCE_SPLIT) {
-         forcePos.y += fc.y;
-      } else {
-         forceMed.y += fc.y;
-      }
-      if (fc.z < -FORCE_SPLIT) {
-         forceNeg.z += fc.z;
-      } else if (fc.z > FORCE_SPLIT) {
-         forcePos.z += fc.z;
-      } else {
-         forceMed.z += fc.z;
-      }
-
-      // If there is a bespoke or special LJ interaction apply it
-      // For an empty exclusion, the force isn't modified since epsSpecial is zero
-      float ratioSpecial = pow(RSpecial*RSpecial/dist2, 3.0);
-      // If this is a real exclusion, we remove the Coulomb part too
-      forceCoulomb += realExclude * coulomb*nonbondPar0.y*nonbondPar1.y/dist3 * del;
-
-      // We remove the Lennard-Jones forces for this exclusion
-      vec3 fSpecial = 12.0*epsSpecial*ratioSpecial*(1.0 - ratioSpecial)/dist2 * del;
-      forceMed += fSpecial;
-
-      // We share this energy equally among the atoms, hence the 1/2
-      // Splitting the energy into 12, 6, and Coulomb components improves numerics
-      float e12 = 0.5*epsMix*ratio*ratio;
-      if (e12 > ENERGY_SPLIT) {
-         energy12Big -= e12;
-      } else {
-         energy12 -= e12;
-      }
-      energy6 -= -epsMix*ratio;
-      energyCoulomb -= realExclude*0.5*coulomb*nonbondPar0.y*nonbondPar1.y/dist;
-
-      // Special energy
-      energy12 += 0.5*epsSpecial*ratioSpecial*ratioSpecial;
-      energy6 += -epsSpecial*ratioSpecial;
-    }
-  }
-
-  return vec4(forcePos + forceNeg + forceMed + forceCoulomb, energy12 + energy6 + energyCoulomb);
-}
-
-
-////////////////////////////////////////////////////////////////
-// Forces for Lennard-Jones, Coulomb, and exclusions
-// Here, excluded interactions are subtracted off in the second stage
-// Nothing is done to accelerate performance
-//
-// The nonbonded parameter texture (nonbondTex) has the format:
-// {x: mass, y: charge, z: epsilon_LJ, w: RMin_LJ}
-// The exclusion texture (excludeTex) has the format:
-// {x: partner atom index, y: unused, z: epsilon_LJ, w: RMin_LJ}
-//
-// epsilon_LJ = 0.0,  RMin_LJ = -1.0 is a real exclusion (LJ & Coulomb removed)
-// epsilon_LJ = 0.0,  RMin_LJ = 0.0 is an inactive exclusion (does nothing)
-// Other values represent special LJ (1-4 or bespoke); Coulomb should be normal 
-vec4 nonbondForceFast(vec4 posActive0, vec2 posTexCoord) {
+vec4 nonbondForceSubtractExclude(vec4 posActive0, vec2 posTexCoord) {
   // Position of this atom
   vec3 pos0 = posActive0.xyz;
   float atomIndex0 = floor(gl_FragCoord.x) + floor(gl_FragCoord.y)*ATOM_TEX_WIDTH;
@@ -1204,6 +1245,158 @@ vec4 nonbondForceFast(vec4 posActive0, vec2 posTexCoord) {
     // The conditional is to avoid infinities from self-interaction or inactive atoms
     // RSpecial checks if this an active exclusion, or just all zeros?
     if (RSpecial != 0.0 && posActive0.w != 0.0 && posActive1.w != 0.0) {
+      float dist2 = dot(del,del);
+      float dist3 = dist*dist2;
+      float ratio = pow(RMix*RMix/dist2, 3.0);
+
+      // Calculate the Coulomb and Lennard-Jones forces to subtract
+      // The conditional is to avoid the self-interaction (or maybe clashes)
+      vec3 fc = -12.0*epsMix*ratio*(1.0 - ratio)/dist2 * del;
+      forceLJ += fc;
+
+      // If there is a bespoke or special LJ interaction apply it
+      // For an empty exclusion, the force isn't modified since epsSpecial is zero
+      float ratioSpecial = pow(RSpecial*RSpecial/dist2, 3.0);
+      // If this is a real exclusion, we remove the Coulomb part too
+      forceCoulomb += realExclude * coulomb*nonbondPar0.y*nonbondPar1.y/dist3 * del;
+
+      // We remove the Lennard-Jones forces for this exclusion
+      vec3 fSpecial = 12.0*epsSpecial*ratioSpecial*(1.0 - ratioSpecial)/dist2 * del;
+      forceLJ += fSpecial;
+
+      // We share this energy equally among the atoms, hence the 1/2
+      // Splitting the energy into 12, 6, and Coulomb components improves numerics
+      float e12 = 0.5*epsMix*ratio*ratio;
+      energy12 -= e12;
+      energy6 -= -epsMix*ratio;
+      energyCoulomb -= realExclude*0.5*coulomb*nonbondPar0.y*nonbondPar1.y/dist;
+
+      // Special energy
+      energy12 += 0.5*epsSpecial*ratioSpecial*ratioSpecial;
+      energy6 += -epsSpecial*ratioSpecial;
+    }
+  }
+
+  return vec4(forceLJ + forceCoulomb, energy12 + energy6 + energyCoulomb);
+}
+
+////////////////////////////////////////////////////////////////
+// Forces for Lennard-Jones, Coulomb, and exclusions/special LJ
+// This is similar to the above in that excluded interactions
+// are subtracted off in the second stage.
+// However, we ignore forces and energies with dist <= 0.55*RMix
+// (almost all exclusions) improving precision immensely.
+// However, this would be bad for minimization.
+//
+// The nonbonded parameter texture (nonbondTex) has the format:
+// {x: mass, y: charge, z: epsilon_LJ, w: RMin_LJ}
+// The exclusion texture (excludeTex) has the format:
+// {x: partner atom index, y: unused, z: epsilon_LJ, w: RMin_LJ}
+//
+// epsilon_LJ = 0.0,  RMin_LJ = -1.0 is a real exclusion (LJ & Coulomb removed)
+// epsilon_LJ = 0.0,  RMin_LJ = 0.0 is an inactive exclusion (does nothing)
+// Other values represent special LJ (1-4 or bespoke); Coulomb should be normal 
+vec4 nonbondForceNearCutoff(vec4 posActive0, vec2 posTexCoord) {
+  // Position of this atom
+  vec3 pos0 = posActive0.xyz;
+  float atomIndex0 = floor(gl_FragCoord.x) + floor(gl_FragCoord.y)*ATOM_TEX_WIDTH;
+
+  // Nonbonded parameters for this atom (same dimensions as position)
+  // {x: mass, y: charge, z: epsilon_LJ, w: RMin_LJ}
+  vec4 nonbondPar0 = texture2D(nonbondTex, posTexCoord);
+
+  // Summing these separately typically reduces numerical error in the energy
+  float energy12 = 0.0;
+  float energy6 = 0.0;
+  float energyCoulomb = 0.0;
+
+  // Splitting the forces in into different sums, we can the error in the force by a factor of 2!
+  vec3 forceLJ = vec3(0);
+  vec3 forceCoulomb = vec3(0);
+     
+  ////////////////////////////////////////////////////////////////
+  // All pairs Coulomb and Lennard-Jones force calculation
+  // We loop over all pixels in the position texture
+  // We do this blindly, ignoring exclusions (including special 1-4 and bespoke)
+  // These forces are later subtracted below in these cases
+  // Self-interactions are zero due to atomIndex comparison
+  for (float ix = 0.0; ix < ATOM_TEX_WIDTH; ix+=1.0) {
+    for (float iy = 0.0; iy < ATOM_TEX_HEIGHT; iy+=1.0) {
+      // Get the texture coordinates of the other atom
+      float texX = (ix + 0.5) / ATOM_TEX_WIDTH;
+      float texY = (iy + 0.5) / ATOM_TEX_HEIGHT;
+      float atomIndex1 = ix + iy*ATOM_TEX_WIDTH;
+
+      // Get the position of the other atom
+      vec4 posActive1 = texture2D(posTex, vec2(texX, texY));
+      vec3 pos1 = posActive1.xyz;
+
+      // Get the nonbonded parameters of the other atom
+      vec4 nonbondPar1 = texture2D(nonbondTex, vec2(texX, texY));
+      // Lorentz-Berthelot mixing rules
+      float epsMix = sqrt(nonbondPar0.z*nonbondPar1.z);
+      float RMix = 0.5*(nonbondPar0.w + nonbondPar1.w);
+
+      // Get the separation vector and distance
+      vec3 del = wrap(pos1 - pos0, box);
+      float dist = length(del);
+
+      // The conditional is to avoid infinities from self-interaction or inactive atoms
+      if (dist > EXCLUDE_FACTOR*RMix && atomIndex1 != atomIndex0 && posActive0.w != 0.0 && posActive1.w != 0.0) {
+	float dist2 = dot(del,del);
+	float dist3 = dist*dist2;
+	float ratio = pow(RMix*RMix/dist2, 3.0);
+
+	// Calculate the Coulomb and Lennard-Jones forces
+	vec3 f = 12.0*epsMix*ratio*(1.0 - ratio)/dist2 * del;
+        forceCoulomb -= coulomb*nonbondPar0.y*nonbondPar1.y/dist3 * del;
+
+        // Splitting into different components significantly reduces numerical error
+        forceLJ += f;
+
+	// We share this energy equally among the atoms, hence the 1/2
+        // Splitting the energy into 12, 6, and Coulomb components improves numerics
+        float e12 = 0.5*epsMix*ratio*ratio;
+        energy12 += e12;
+        energy6 += -epsMix*ratio;
+        energyCoulomb += 0.5*coulomb*nonbondPar0.y*nonbondPar1.y/dist;
+      }
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////
+  // Exclusion calculation
+  // This includes special 1-4 and bespoke LJ parameters
+  float excludeStart = posTexCoord.x - 1.0/(2.0*ATOM_TEX_WIDTH) + 1.0/(2.0*EXCLUDE_TEX_WIDTH);
+  for (float ix = 0.0; ix < EXCLUDE_TERMS_PER_ATOM; ix+=1.0) {
+    float excludeTexX = excludeStart + ix/EXCLUDE_TEX_WIDTH;
+    vec4 exclude = texture2D(excludeTex, vec2(excludeTexX, posTexCoord.y));
+    float atomIndex1 = exclude.x;
+    float epsSpecial = exclude.z; 
+    float RSpecial = exclude.w;
+
+    // Get the position of the partner atom
+    vec2 posTexCoord1 = atomTextureCoords(atomIndex1);
+    vec4 posActive1 = texture2D(posTex, posTexCoord1);
+    vec3 pos1 = posActive1.xyz;
+
+    // The signature for a real exclusion is eps=0.0, RMin=-1.0
+    float realExclude = (epsSpecial == 0.0 && RSpecial == -1.0) ? 1.0 : 0.0;
+
+    // We need to recalculate the standard LJ so we can subtract it
+    // Get the nonbonded parameters of the other atom
+    vec4 nonbondPar1 = texture2D(nonbondTex, posTexCoord1);
+    // Lorentz-Berthelot mixing rules
+    float epsMix = sqrt(nonbondPar0.z*nonbondPar1.z);
+    float RMix = 0.5*(nonbondPar0.w + nonbondPar1.w);
+         
+    // Get the separation vector and distance
+    vec3 del = wrap(pos1 - pos0, box);
+    float dist = length(del);
+
+    // The conditional is to avoid infinities from self-interaction or inactive atoms
+    // RSpecial checks if this an active exclusion, or just all zeros?
+    if (dist > EXCLUDE_FACTOR*RMix && RSpecial != 0.0 && posActive0.w != 0.0 && posActive1.w != 0.0) {
       float dist2 = dot(del,del);
       float dist3 = dist*dist2;
       float ratio = pow(RMix*RMix/dist2, 3.0);
@@ -1350,9 +1543,9 @@ vec4 angleForce(vec3 pos0, vec2 posTexCoord) {
       vec3 a_unit = a*a_rmag;
       vec3 b_unit = b*b_rmag;
 
-      // This way of calculating the angles (atan(sinTheta,cosTheta))
+      // This way of calculating the angles atan(sinTheta,cosTheta)
       // gives two orders of magnitude better accuracy than acos(cosTheta).
-      // I'm not sure why! Is this true on all hardware?
+      // I'm not sure why! Is this true on other hardware?
       float cosTheta = dot(a_unit, b_unit);
       float sinTheta = length(cross(a_unit, b_unit));
       float theta = (cosTheta == 0.0) ? 0.5*PI : atan(sinTheta,cosTheta);
@@ -1465,7 +1658,7 @@ vec4 dihedralForce(vec3 pos0, vec2 posTexCoord) {
 
       // Calculate the dihedral angle
       float cosPhi = dot(M, N);
-      // Calculating sinPhi this way instead of sqrt((1.0 - cosPhi)*(1.0 + cosPhi) improves accuracy and is more stable
+      // Calculating sinPhi this way instead of sqrt((1.0 - cosPhi)*(1.0 + cosPhi) improves accuracy
       float sinPhi = length(cross(M, N));
       float phi = -atan(sinPhi, cosPhi);
       // Impropers have parMulti = 0
@@ -1533,9 +1726,8 @@ vec4 computeForceEnergy(vec4 posActive0, vec2 posTexCoord) {
   vec4 forceEnergy = vec4(0.0);
 
   // Lennard-Jones, Coulomb, exclusions
-  //forceEnergy += nonbondForceExclude(posActive0, posTexCoord); 
-  forceEnergy += nonbondForce(posActive0, posTexCoord); 
-  //forceEnergy += nonbondForceFast(posActive0, posTexCoord); 
+  // The hash implementation is highly accurate and relatively fast
+  forceEnergy += nonbondForceHash(posActive0, posTexCoord); 
   // Bonds
   forceEnergy += bondForce(pos0, posTexCoord);
   // Angles
@@ -1551,11 +1743,59 @@ vec4 computeForceEnergy(vec4 posActive0, vec2 posTexCoord) {
 
   return forceEnergy;
 }
+
+// Sum the force and energy of all components
+vec4 computeForceEnergyFast(vec4 posActive0, vec2 posTexCoord) {
+   vec3 pos0 = posActive0.xyz;
+
+  // Initialize the force to zero
+  vec4 forceEnergy = vec4(0.0);
+
+  // Lennard-Jones, Coulomb, exclusions
+  // The near cutoff implementation can be highly accurate and is very fast
+  forceEnergy += nonbondForceNearCutoff(posActive0, posTexCoord); 
+  // Bonds
+  forceEnergy += bondForce(pos0, posTexCoord);
+  // Angles
+  forceEnergy += angleForce(pos0, posTexCoord);
+  // Dihedral force
+  forceEnergy += dihedralForce(pos0, posTexCoord);
+
+  // Restraints
+  // Atomic restraints
+  forceEnergy += restraintForce(pos0, posTexCoord);
+  // Wall force
+  forceEnergy += wallForce(pos0, posTexCoord);
+
+  return forceEnergy;
+}
+
 `;
 
 
 ////////////////////////////////////////////////////////////////////////////////
 // Calculate the force and potential energy using functions in the preamble
+// The split function is not good for minimization since we throw out forces
+// when atoms are too close.
+this.forceEnergyFastFS = `
+precision highp float;
+${this.forceEnergyPreamble}
+
+void main() {
+  // Get the texture coordinates for this atom in the position texture
+  vec2 posTexCoord = gl_FragCoord.xy / vec2(ATOM_TEX_WIDTH, ATOM_TEX_HEIGHT);
+  // The position of this atom
+  vec4 posActive0 = texture2D(posTex, posTexCoord);
+  vec3 pos0 = posActive0.xyz;
+
+  // Compute the force and energy
+  vec4 forceEnergy = computeForceEnergyFast(posActive0, posTexCoord);
+
+  // Return the force and energy
+  gl_FragColor = forceEnergy;
+}
+`;
+
 this.forceEnergyFS = `
 precision highp float;
 ${this.forceEnergyPreamble}
@@ -1575,6 +1815,7 @@ void main() {
 }
 `;
 
+	
 // Move down the potential gradient for a steepest descent energy minimizer
 this.moveDownhillFS = `
 precision highp float;
@@ -1807,12 +2048,36 @@ this.preparePrograms(gl);
 	    dihedralTex: gl.getUniformLocation(this.force, 'dihedralTex'),
 	    excludeTex: gl.getUniformLocation(this.force, 'excludeTex'),
 	    nonbondTex: gl.getUniformLocation(this.force, 'nonbondTex'),
+	    hashTex: gl.getUniformLocation(this.force, 'hashTex'),
+	    hashA0: gl.getUniformLocation(this.force, 'hashA0'),
+	    hashA1: gl.getUniformLocation(this.force, 'hashA1'),
 	    restrainTex: gl.getUniformLocation(this.force, 'restrainTex'),
 	    posTex: gl.getUniformLocation(this.force, 'posTex'),
 	    box: gl.getUniformLocation(this.force, 'box'),
 	    wall: gl.getUniformLocation(this.force, 'wall'),
 	    wallSpring: gl.getUniformLocation(this.force, 'wallSpring'),
 	    coulomb: gl.getUniformLocation(this.force, 'coulomb'),
+	};
+	
+	// Program for calculating forces from atom positions
+	// This one throws out forces when atoms are too close 
+	this.forceFast = webglUtils.createProgramFromSources(gl, [this.dummyVS, this.forceEnergyFastFS]);
+	this.forceFastLocs = {
+	    dummy: gl.getAttribLocation(this.forceFast, 'dummy'),
+	    bondTex: gl.getUniformLocation(this.forceFast, 'bondTex'),
+	    angleTex: gl.getUniformLocation(this.forceFast, 'angleTex'),
+	    dihedralTex: gl.getUniformLocation(this.forceFast, 'dihedralTex'),
+	    excludeTex: gl.getUniformLocation(this.forceFast, 'excludeTex'),
+	    nonbondTex: gl.getUniformLocation(this.forceFast, 'nonbondTex'),
+	    hashTex: gl.getUniformLocation(this.forceFast, 'hashTex'),
+	    hashA0: gl.getUniformLocation(this.forceFast, 'hashA0'),
+	    hashA1: gl.getUniformLocation(this.forceFast, 'hashA1'),
+	    restrainTex: gl.getUniformLocation(this.forceFast, 'restrainTex'),
+	    posTex: gl.getUniformLocation(this.forceFast, 'posTex'),
+	    box: gl.getUniformLocation(this.forceFast, 'box'),
+	    wall: gl.getUniformLocation(this.forceFast, 'wall'),
+	    wallSpring: gl.getUniformLocation(this.forceFast, 'wallSpring'),
+	    coulomb: gl.getUniformLocation(this.forceFast, 'coulomb'),
 	};
 
 	// Program for moving downhill with the force

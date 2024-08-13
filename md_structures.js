@@ -134,6 +134,7 @@ class AtomTextureData {
 
 	// Insert the base molecule into the texture data arrays
 	this.insertMolecule(baseMolecule, this.pos);
+	// Hash table is initialized in insertMolecule
     }
 
     static countActive(posData) {
@@ -227,6 +228,9 @@ class AtomTextureData {
 	    //console.log(`Deleted ${this.termsPerAtom[k]*deleteList.length} ${TermInfo.name[k]} terms for atoms being deleted`);
 	    //console.log(`Deleted ${termCount} ${TermInfo.name[k]} terms altogether (including for other atoms)`);
 	}
+
+	// Regenerate the hash table
+	this.makeHashTable();
 	
 	return deleteList.length;
     }
@@ -422,6 +426,9 @@ class AtomTextureData {
 	this.insertSelect(mol, map);
 	// Insert the initial positions into the restraint texture
 	this.insertRestrain(mol, map);
+	
+	// Regenerate the hash table
+	this.makeHashTable();
 	
 	return true;
     }
@@ -794,6 +801,220 @@ class AtomTextureData {
 	return maxTerms;
     }
 
+    makeHashTable() {
+	// Optimize the hash table parameters for the least collisions
+	const hashTableAttempts = 15;
+	// We use a large fill factor so we only have 1 or 2 collisions at worst
+	// However, getting zero collisions and then making the shader not check for collisions doesn't improve performance noticeably (may degrade performance slightly due to larger hash table?)
+	//const hashTableFillFactor = 15;
+	const hashTableFillFactor = 23;
+	//const hashTableFillFactor = 201; // try to get zero collisions (not worth it)
+	this.stopCollisions = 20; // Don't allow more than some number of collisions
+
+	// Count the number of active exclusions (or special L-J parameters) in the exclusion data
+	const excludePerAtom = this.termsPerAtom[TermInfo.exclude];
+	const excludeList = [];
+	for (let ai = 0; ai < this.size; ai++) {
+	    // Loop through the exclusion terms
+	    const atomStart = 4*excludePerAtom*ai; // starting index in exclusion data
+	    for (let ti = 0; ti < excludePerAtom; ti++) {
+		const termStart = atomStart + 4*ti;
+		// Active exclusions have non-zero RMin
+		if (this.exclude[termStart+3] != 0.0 && ai < this.exclude[termStart]) {
+		    excludeList.push([this.exclude[termStart], this.exclude[termStart+1]]);
+		}
+	    }
+	}
+	const excludeCount = excludeList.length;
+
+	// Create the hash table
+	this.hashDim = {};
+	const hashSize = hashTableFillFactor*excludeCount;
+
+	// Note that "primes" (used for the hash table texture dimensions) and "bigPrimes" (used for the multipliers)
+	// must be disjoint. (a == m is bad for the linear congruential generator).
+	// Also, 991*16381 < 2^24 (needed for exact handling of integers with 32-bit floats)
+	const primes = [5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503, 509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587, 593, 599, 601, 607, 613, 617, 619, 631, 641, 643, 647, 653, 659, 661, 673, 677, 683, 691, 701, 709, 719, 727, 733, 739, 743, 751, 757, 761, 769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839, 853, 857, 859, 863, 877, 881, 883, 887, 907, 911, 919, 929, 937, 941, 947, 953, 967, 971, 977, 983, 991];
+	const bigPrimes = [15013, 15017, 15031, 15053, 15061, 15073, 15077, 15083, 15091, 15101, 15107, 15121, 15131, 15137, 15139, 15149, 15161, 15173, 15187, 15193, 15199, 15217, 15227, 15233, 15241, 15259, 15263, 15269, 15271, 15277, 15287, 15289, 15299, 15307, 15313, 15319, 15329, 15331, 15349, 15359, 15361, 15373, 15377, 15383, 15391, 15401, 15413, 15427, 15439, 15443, 15451, 15461, 15467, 15473, 15493, 15497, 15511, 15527, 15541, 15551, 15559, 15569, 15581, 15583, 15601, 15607, 15619, 15629, 15641, 15643, 15647, 15649, 15661, 15667, 15671, 15679, 15683, 15727, 15731, 15733, 15737, 15739, 15749, 15761, 15767, 15773, 15787, 15791, 15797, 15803, 15809, 15817, 15823, 15859, 15877, 15881, 15887, 15889, 15901, 15907, 15913, 15919, 15923, 15937, 15959, 15971, 15973, 15991, 16001, 16007, 16033, 16057, 16061, 16063, 16067, 16069, 16073, 16087, 16091, 16097, 16103, 16111, 16127, 16139, 16141, 16183, 16187, 16189, 16193, 16217, 16223, 16229, 16231, 16249, 16253, 16267, 16273, 16301, 16319, 16333, 16339, 16349, 16361, 16363, 16369, 16381, 16411, 16417, 16421, 16427, 16433, 16447, 16451, 16453, 16477, 16481, 16487, 16493, 16519, 16529, 16547, 16553, 16561, 16567, 16573, 16603, 16607, 16619, 16631, 16633, 16649, 16651, 16657, 16661, 16673, 16691, 16693, 16699, 16703, 16729, 16741, 16747, 16759, 16763, 16787, 16811, 16823, 16829, 16831];
+
+	const hashSqrt = Math.ceil(Math.sqrt(hashSize));
+	if (hashSqrt > primes[primes.length-2]) {
+	    // We can't use values bigger than 16777216
+	    // mod() begins to give problems for too big of integers
+	    this.hashDim = {width: 983, height: 991};
+	} else {
+	    // Find the first two primes greater than or equal to excludeSize
+	    for (let i = 0; i < primes.length-1; i++) {
+		if (primes[i] >= hashSqrt) {
+		    this.hashDim = {width: primes[i], height: primes[i+1]};
+		    break;
+		}
+	    }
+	}
+	this.hashDim.size = this.hashDim.width * this.hashDim.height;
+	console.log('exclusion hash table size:', this.hashDim.width, this.hashDim.height);
+	console.log(`There are ${excludeCount} active exclusions`);
+	const hashLoadPercent = 100.0*excludeCount/this.hashDim.size;
+	console.log(`Hash table load: ${hashLoadPercent.toFixed(2)}%`);
+
+	// The hash table will store the exclusions in a (atomIndex0 atomIndex1 epsilon Rmin)
+	// With atomIndex0 < atomIndex1
+	this.hashA = new Float32Array(2);
+	let bestA = new Float32Array(2);
+	let bestCollisions = this.stopCollisions;
+	let worstCollisions = 0;
+	let sumCollisions = 0;
+	
+	// Make sure the hash function multipliers fit in a 32-bit float
+	for (let i = 0; i < hashTableAttempts; i++) {
+	    // Select random hash function factors
+	    const pi0 = Math.floor(bigPrimes.length*Math.random());
+	    const pi1 = Math.floor(bigPrimes.length*Math.random());
+	    this.hashA[0] = bigPrimes[pi0];
+	    this.hashA[1] = bigPrimes[pi1];
+	    this.hashAtoms();
+
+	    sumCollisions += this.maxCollisions;
+	    if (this.maxCollisions < bestCollisions) {
+		bestCollisions = this.maxCollisions;
+		bestA[0] = this.hashA[0];
+		bestA[1] = this.hashA[1];
+	    }
+	    if (this.maxCollisions > worstCollisions)
+		worstCollisions = this.maxCollisions;
+	    //console.log(`hashA ${this.hashA[0]} ${this.hashA[1]} col ${this.maxCollisions}`);
+	}
+	const meanMaxCollisions = sumCollisions/hashTableAttempts;
+
+	// We've finished. Set to the best value
+	this.hashA[0] = bestA[0];
+	this.hashA[1] = bestA[1];
+	// Regenerate the hash table using the best multipliers
+	this.hashAtoms();
+	// The shaders are SIMD, so we need to hardcode the maximum number
+	// of collisions during any search
+	
+	if (this.maxCollisions >= this.stopCollisions) {
+	    console.log(`ERROR! Reached maximum number of hash table collisions ${this.stopCollisions}. Hash table is incomplete. It is probably overloaded.`);	    
+	}
+	console.log('Mean maximum collisions in attempted exclusion hash tables:', meanMaxCollisions);
+	console.log('Worst maximum collisions in attempted exclusion hash tables:', worstCollisions);
+	console.log('Maximum collisions in optimized exclusion hash table:', this.maxCollisions);
+	console.log('Multipliers for optimized exclusion hash table:', this.hashA[0], this.hashA[1]);
+    }
+    
+    hashAtoms() {
+	// Create the hash data array
+	this.hash = new Float32Array(4*this.hashDim.size);
+	
+	// Loop through the atoms
+	const excludePerAtom = this.termsPerAtom[TermInfo.exclude];
+	this.maxCollisions = 0;
+	for (let ai = 0; ai < this.size; ai++) {
+	    // Loop through the exclusion terms
+	    const atomStart = 4*excludePerAtom*ai; // starting index in exclusion data
+	    for (let ti = 0; ti < excludePerAtom; ti++) {
+		const termStart = atomStart + 4*ti;
+		// Each exclusion occupies one RGBA pixel
+		const atomIndex1 = this.exclude[termStart];
+		const epsilon = this.exclude[termStart+2];
+		const RMin = this.exclude[termStart+3];
+
+		// Hash only when atomIndex0 < atomIndex1 to not duplicate
+		if (ai < atomIndex1) {
+		    const hashPar = [ai, atomIndex1, epsilon, RMin];
+		    const collisions = this.hashInsert(hashPar);
+		    if (collisions > this.maxCollisions) this.maxCollisions = collisions;
+		    //console.log('exclusions', ai, atomIndex1, epsilon, RMin, 'col', collisions);
+		}
+	    } // End of exclusion term loop
+	} // End of atom loop
+	return this.maxCollisions;
+    }
+
+    // The atom indices must first be conditioned for the linear congruential generator
+    startHash(atomIndex0, atomIndex1) {
+	// Make sure we have good starting numbers (x % this.hashDim.width == 0 is bad)
+	const i0 = (atomIndex0 % (this.hashDim.width-1)) + 1;
+	const i1 = (atomIndex1 % (this.hashDim.height-1)) + 1;
+	return this.nextHash(i0, i1);
+    }
+
+    // Hashing function based on a linear congruential generator
+    nextHash(i0, i1) {
+	// Use a linear congruential generator get new hash table coordinates
+	const ret0 = (this.hashA[0] * i0) % this.hashDim.width;
+	const ret1 = (this.hashA[1] * i1) % this.hashDim.height;
+	return [ret0, ret1];
+    }
+
+    // Get exclusion or special LJ parameters from the hash table
+    hashRead(atomIndex0, atomIndex1) {
+	// Hash the atom indices
+	let [i0, i1] = this.startHash(atomIndex0, atomIndex1);
+	let hashStart = 4*(i0 + i1*this.hashDim.width);
+	let hashPar = this.hash.slice(hashStart,hashStart+4);
+	
+	// Check the first position in the table
+	console.log(`Looked for ${atomIndex0} ${atomIndex1} at ${i0} ${i1}`);
+	if (hashPar[0] == atomIndex0 && hashPar[1] == atomIndex1) {
+	    console.log(`Found ${atomIndex0} ${atomIndex1} at ${i0} ${i1}`);
+	    // Found!
+	    return hashPar;
+	}
+
+	// Hash again
+	for (let collide = 1; collide <= this.maxCollisions; collide++) {
+	    // Hash the last hash function result
+	    [i0, i1] = this.nextHash(i0, i1);
+	    console.log('i0 i1', i0, i1);
+	    hashStart = 4*(i0 + i1*this.hashDim.width);
+	    hashPar = this.hash.slice(hashStart,hashStart+4);
+	    console.log(`Looked for ${atomIndex0} ${atomIndex1} at ${i0} ${i1}  after ${collide} collisions`);
+	    if (hashPar[0] == atomIndex0 && hashPar[1] == atomIndex1) {
+		console.log(`Found ${atomIndex0} ${atomIndex1} at ${i0} ${i1} after ${collide} collisions`);
+		return hashPar;
+	    }
+	}
+
+	// Not found
+	// Return null
+	return null;
+    }
+
+    // Insert exclusion or special L-J into the hash table
+    // Returns the number of collisions
+    // insertPar has the form [atomIndex0, atomIndex1 epsilon RMin]
+    hashInsert(insertPar) {
+	const atomIndex0 = insertPar[0];
+	const atomIndex1 = insertPar[1];
+	
+	// Hash the atom indices
+	let [i0, i1] = this.startHash(atomIndex0, atomIndex1);
+	let hashStart = 4*(i0 + i1*this.hashDim.width);
+	let hashPar = this.hash.slice(hashStart,hashStart+4);
+	
+	let collisions = 0;
+	// Active exclusions have RMin != 0
+	while (hashPar[3] != 0.0 && collisions < this.stopCollisions) {
+	    // We've had a collision
+	    collisions++; 
+	    // Hash the last hash function result
+	    [i0, i1] = this.nextHash(i0, i1);
+	    hashStart = 4*(i0 + i1*this.hashDim.width);
+	    hashPar = this.hash.slice(hashStart,hashStart+4);
+	}
+
+	// This is an empty space
+	//console.log(`inserting ${atomIndex0} ${atomIndex1} at ${i0} ${i1} with ${collisions} collisions`);
+	this.hash[hashStart] = insertPar[0];
+	this.hash[hashStart+1] = insertPar[1];
+	this.hash[hashStart+2] = insertPar[2];
+	this.hash[hashStart+3] = insertPar[3];
+	return collisions;
+    }
+    
+    
     // Create a PDB string 
     writePDB() {
 	const record = 'ATOM  ';
