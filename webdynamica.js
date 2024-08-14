@@ -1556,14 +1556,31 @@
 	    // Get the newest positions
 	    const currPos = extractData(env, currTexInfo.pos, textures.width, textures.height);
 
+	    // Get the initial number of collisions in the hash table
+	    const oldMaxCollisions = atomTexData.maxCollisions;
+
 	    // Update the texture data
 	    const insertPos = [-simSys.wall[0]*0.8+simSys.radius, -simSys.wall[1]*0.8+simSys.radius, 1.0];
 	    const ok = atomTexData.insertMolecule(mol, currPos, insertPos);
 
 	    if (ok) {
+		// Has the maximum number of collisions changed?
+		// If so we need to recompile the shaders using the hash table
+		if (atomTexData.maxCollisions > oldMaxCollisions) {
+		    console.log(`Maximum collisions in the hash table changed from ${oldMaxCollisions} to ${atomTexData.maxCollisions} on insertion of ${name}. Reinitializing hash table and shaders...`);
+		    // We might as well regenerate the hash table while we're at it
+		    // Maybe we can improve maxCollisions
+		    atomTexData.makeHashTable();
+		    
+		    // Reinitialize the shader code with potentially different hash table dimensions and maxCollisions
+		    shaders = new MDShaders(gl, atomTexData, atomMinDist, atomMaxDisplace);
+		    // We have to remember to update this reference in the "env" variable
+		    env.shaders = shaders;
+		}
+		
 		// Reinitialize the textures and frame buffers
 		textures = new MDTextures(gl, atomTexData, shaders, simSys);
-
+		
 		// We have to remember to update this reference in the "env" variable
 		env.textures = textures;
 
