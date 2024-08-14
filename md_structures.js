@@ -230,9 +230,31 @@ class AtomTextureData {
 	    //console.log(`Deleted ${termCount} ${TermInfo.name[k]} terms altogether (including for other atoms)`);
 	}
 
-	// Regenerate the hash table
-	this.makeHashTable(this.hashDim.width, this.hashDim.height);
-	
+	// Clear any selected items in the hash table
+	// This needs to be done since subsequently inserted atoms might
+	// have the same indices.
+	// However, it means that when the hash table is searched, we
+	// can't stop at an empty node and need to go all the way to
+	// maxCollisions. This is fine since the SIMD nature of the
+	// shader means there is no advantage to shortcutting the search
+	// anyway.
+	let hashDelete = 0;
+	for (let k = 0; k <= this.hashDim.size; k++) {
+	    const atomIndex0 = this.hash[4*k];
+	    const atomIndex1 = this.hash[4*k+1];
+	    const RMin = this.hash[4*k+3]; 
+
+	    // Delete active exclusions containing this atom
+	    if (RMin != 0.0 && (deleteList.includes(atomIndex0) || deleteList.includes(atomIndex1))) {
+		this.hash[4*k] = 0.0;
+		this.hash[4*k+1] = 0.0;
+		this.hash[4*k+2] = 0.0;
+		this.hash[4*k+3] = 0.0;
+		hashDelete++;
+	    }
+	}
+	//console.log(`Deleted ${hashDelete} exclusions from the hash table.`);
+
 	return deleteList.length;
     }
 
@@ -427,9 +449,17 @@ class AtomTextureData {
 	this.insertSelect(mol, map);
 	// Insert the initial positions into the restraint texture
 	this.insertRestrain(mol, map);
-	
-	// Regenerate the hash table
-	this.makeHashTable(this.hashDim.width, this.hashDim.height);
+
+	// Insert into the hash table or generate it from scratch
+	if (this.hash != null) {
+	    // If the hash table exists, insert the molecule
+	    // Note that we may increase maxCollisions!
+	    // This may require recompiling the shaders
+	    this.insertMoleculeIntoHashTable(map);
+	} else {
+	    // Optimize the hash table from scratch
+	    this.makeHashTable();
+	}
 	
 	return true;
     }
@@ -478,9 +508,10 @@ class AtomTextureData {
 	return n;
     }
 
+    // Add newly inserted molecule to the restraint texture (with no restraints)
     insertRestrain(mol, map) {
 	// Assume that we've already inserted into this.pos
-	for (let ai = 0; ai < mol.num; ai++) {
+	for (let ai = 0; ai < map.length; ai++) {
 	    const texAtomIndex = map[ai];
 	    for (let c = 0; c < 3; c++) {
 		// Get the original position
@@ -491,7 +522,8 @@ class AtomTextureData {
 	    this.restrain[4*texAtomIndex + 3] = 0.0;
 	}
     }
-    
+
+    // Add newly inserted molecule to the selection texture
     insertSelect(mol, map) {
 	// Zero out the terms for this atom
 	for (let ai = 0; ai < mol.num; ai++) {
@@ -556,7 +588,7 @@ class AtomTextureData {
 	    this.select[4*map[ai]+3] = this.color[4*map[ai]+3];
 	}
     }
-    
+
     // Stores [mass, charge, LJ_epsilon, LJ_Rmin] in the texture data array
     // The texture has the same size as other atom textures (one RGBA per atom)
     insertNonbond(mol, map) {
@@ -846,10 +878,11 @@ class AtomTextureData {
 	const hashLoadPercent = 100.0*excludeCount/this.hashDim.size;
 	console.log(`Hash table load: ${hashLoadPercent.toFixed(2)}%`);
     }
-    
+
+    // Create a new hash table with optimized parameters
     makeHashTable(width, height) {
 	// Optimize the hash table parameters for the least collisions
-	const hashTableAttempts = 10;
+	const hashTableAttempts = 15;
 	this.stopCollisions = 20; // Don't allow more than some number of collisions
 
 	// Create a new hash table size
@@ -907,7 +940,8 @@ class AtomTextureData {
 	console.log('Maximum collisions in optimized exclusion hash table:', this.maxCollisions);
 	console.log('Multipliers for optimized exclusion hash table:', this.hashA[0], this.hashA[1]);
     }
-    
+
+    // This function creates the hash table from scratch
     hashAtoms() {
 	// Create the hash data array
 	this.hash = new Float32Array(4*this.hashDim.size);
@@ -926,11 +960,37 @@ class AtomTextureData {
 		const RMin = this.exclude[termStart+3];
 
 		// Hash only when atomIndex0 < atomIndex1 to not duplicate
-		if (ai < atomIndex1) {
+		// Hash only active exclusions
+		if (ai < atomIndex1 && RMin != 0) {
 		    const hashPar = [ai, atomIndex1, epsilon, RMin];
 		    const collisions = this.hashInsert(hashPar);
-		    if (collisions > this.maxCollisions) this.maxCollisions = collisions;
 		    //console.log('exclusions', ai, atomIndex1, epsilon, RMin, 'col', collisions);
+		}
+	    } // End of exclusion term loop
+	} // End of atom loop
+	return this.maxCollisions;
+    }
+
+    // This must be done after the exclusion terms are inserted (this.exclude is valid)
+    insertMoleculeIntoHashTable(map) {
+	const excludePerAtom = this.termsPerAtom[TermInfo.exclude];
+	for (let ai = 0; ai < map.length; ai++) {
+	    const atomIndex0 = map[ai];
+	    
+	    // Read through the exclusions associated with this atom
+	    const atomStart =  4*excludePerAtom*atomIndex0;
+	    for (let ti = 0; ti < excludePerAtom; ti++) {
+		const termStart = atomStart + 4*ti;
+		// Each exclusion occupies one RGBA pixel
+		const atomIndex1 = this.exclude[termStart];
+		const epsilon = this.exclude[termStart+2];
+		const RMin = this.exclude[termStart+3];
+
+		// Hash only when atomIndex0 < atomIndex1 to not duplicate
+		// Hash only active exclusions
+		if (atomIndex0 < atomIndex1 && RMin != 0) {
+		    const hashPar = [atomIndex0, atomIndex1, epsilon, RMin];
+		    this.hashInsert(hashPar);
 		}
 	    } // End of exclusion term loop
 	} // End of atom loop
@@ -986,7 +1046,7 @@ class AtomTextureData {
 	// Return null
 	return null;
     }
-
+    
     // Insert exclusion or special L-J into the hash table
     // Returns the number of collisions
     // insertPar has the form [atomIndex0, atomIndex1 epsilon RMin]
@@ -1016,6 +1076,9 @@ class AtomTextureData {
 	this.hash[hashStart+1] = insertPar[1];
 	this.hash[hashStart+2] = insertPar[2];
 	this.hash[hashStart+3] = insertPar[3];
+
+	// Increase maxCollisions if necessary
+	if (collisions > this.maxCollisions) this.maxCollisions = collisions;
 	return collisions;
     }
     
@@ -1030,11 +1093,21 @@ class AtomTextureData {
 	const beta = '  0.00'
 	const temp3 = '      ';
 	const tempEnd = ' ';
+
+	// Make a list of active atoms
+	const atoms = [];
+	for (let ai = 0; ai < this.size; ai++) {
+	    if (this.pos[4*ai+3] != 0) {
+		atoms.push(ai);
+	    }
+	}
+	// Sort by monomer number (select[4*i+1])
+	atoms.sort((ai0, ai1) => this.select[4*ai0+1] - this.select[4*ai1+1]);
 	
 	let PDBString = '';
 	let serial = 0;
 	let resId = 0;
-	for (let i = 0; i < this.size; i++) {
+	for (const i of atoms) {
 	    // Ignore inactive atoms
 	    if (this.pos[4*i+3] == 0) continue;
 	    serial++;
