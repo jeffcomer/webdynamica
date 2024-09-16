@@ -26,10 +26,10 @@
     
   </head>
   <body>
-    <div id="main" class="container" molecule="graph50_n2_chp14aa">
+    <div id="main" class="container" molecule="water_box">
       
       <div class="render">
-	<p id="header"><span id="systemName" class="white-back">Cyclic Peptides on Graphene</span></p>
+	<p id="header"><span id="systemName" class="white-back">Water Box</span></p>
 	<canvas id="canvas3d"></canvas>
       </div>
     
@@ -100,24 +100,26 @@
 
       <pre id="pdbData" class="status"></pre>
     </div>
-
-    <!-- Load the molecules to be displayed or added -->
+    
+   <!-- Load the molecules to be displayed or added -->
     <script>const MOLECULE = {};</script>
     <script src="molecules.js"></script>
     
     <!-- BASE MOLECULES -->
-    <script src="graph50_n2_chp14aa.webdyn.js"></script>
+      <script src="water_box_flex.webdyn.js"></script>
 
     <!-- SIM_PARAMETERS must be set -->
     <script>const SIM_PARAMETERS = {
-       baseMoleculeName: "graph50_n2_chp14aa",
+    baseMoleculeName: "water_box",
+    cameraPosFactor: "0.6",
+    wallSpring: "0.0",
     };
     </script>
     
     <script src="webgl-utils.js"></script>
     <script src="m4.js"></script>
     <script src="md_structures.js"></script>
-    <script src="md_shaders.js"></script>
+    <script src="md_shaders_cutoff.js"></script>
     <script src="webdynamica.js"></script>
   </body>
 </html>
