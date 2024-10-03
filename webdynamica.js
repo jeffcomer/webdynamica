@@ -20,47 +20,60 @@
 
 
 ;(function() {
+    // Note that you must set SIM_PARAMETERS and MOLECULE
     'use strict';
 
     // Enumeration of different simulation states
     const SimState = {none: 0, running: 1, minimizing: 2};
     const SimStateName = ['paused', 'running', 'minimizing'];
 
-    // Set the base molecule from the HTML document
-    const baseMoleculeNameHTML = document.getElementById('main').getAttribute('molecule');
-    
     // Default simulation parameters
-    const SimParameters = {
+    const defaultParameters = {
+	// Model and physical parameters
+	baseMoleculeName: 'default',
 	timestep: 1.0, // in femtoseconds
-	temperature: 310, // in kelvin
+	temperature: 310.0, // in kelvin
+        thermostatOn: true, // boolean
 	langevinDamping: 0.5, // in ps^-1
 	fieldOfView: 25.0, // in degrees
-	//additionalCapacity: 500,
-	additionalCapacity: 300,
-	initialState: SimState.running,
-	cameraPosFactor: 0.4,
-	baseMoleculeName: baseMoleculeNameHTML,
-	//wallSpring: 0.0, // remove the walls
-	//restraintSpring: 0.0, // remove the default restraints
+	wallSpring: 2.0, // in kcal mol^-1 Å^-2
+	restraintSpring: 10.0, // in kcal mol^-1 Å^-2
 
-	// Make available all molecules loaded into MOLECULE
-	// This is used for making molecule thumbnails (selection box) and
-	// determining how big the bond, angle, dihedral, exclusion textures need to be.
-	moleculeNames: Object.keys(MOLECULE),
+	// Interface parameters
+	additionalCapacity: 300, // extra atoms in texture (allows adding more molecules)
+	initialState: SimState.running, // Running
+	
+	// Display parameters
+	cameraPosFactor: 0.4, // how far is camera in Lz units
+	lightPosFactor: 0.7, // how light is camera in Lz units
+	fadeFactor: 0.7, // how light is camera in max dimension (max(L)) units
+    };
 
-	// Converts from resname to a displayed name
-	resNameMap: {'AR': 'argon', 'BAMI': 'benzamidinium(+)', 'BENZ': 'benzene', '3CB': 'benzoate(–)', 'C12': 'dodecane', 'BGLC': 'glucose', 'C': 'graphene', 'methane': 'METH', 'N2': 'dinitrogen', 'O2': 'dioxygen', 'GLY': 'glycine', 'PRO': 'proline', 'THR': 'threonine', 'ALA': 'alanine', 'GLU': 'glutamate(–)', 'PHE': 'phenylalanine', 'LYS': 'lysine(+)', 'ARG': 'arginine(+)', 'SER': 'serine', 'VAL': 'valine', 'TRP': 'tryptophan', 'TYR': 'tyrosine', 'TIP3': 'water', 'SPCF': 'water', 'C8': 'octane', 'NAFT': 'naphthalene', 'CLA': 'chloride ion(–)', 'SOD': 'sodium ion(+)', 'POT': 'potassium ion(+)', 'MG': 'magnesium ion(2+)', 'CAL': 'calcium ion(2+)', 'HSO4': 'bisulfate(–)', 'LIG2': 'lignin fragment', 'CELU': 'cellulose', 'QTZ': 'quartz', 'SIO2': 'silicon dioxide nanoparticle'},
-
-	// Converts from resname to an alternate displayed name
-	altNameMap: {'C12': 'C12 normal alkane', 'methane': 'CH<sub>4</sub>', 'N2': 'N<sub>2</sub>', 'O2': 'O<sub>2</sub>', 'GLY': 'Gly', 'PRO': 'Pro', 'THR': 'Thr', 'ALA': 'Ala', 'GLU': 'Glu', 'PHE': 'Phe', 'LYS': 'Lys', 'ARG': 'Arg', 'SER': 'Ser', 'VAL': 'Val', 'TRP': 'Trp', 'TYR': 'Tyr', 'TIP3': 'H<sub>2</sub>O', 'BGLC': 'grape sugar, dextrose', 'BENZ': 'C<sub>6</sub>H<sub>6</sub>', 'BAMI': 'benzamidine (protonated)', '3CB': 'benzoic acid (deprotonated)', 'C8': 'C8 normal alkane', 'CLA': 'Cl<sup>–</sup>', 'SOD': 'Na<sup>+</sup>', 'POT': 'K<sup>+</sup>', 'MG': 'Mg<sup>2+</sup>', 'CAL': 'Ca<sup>2+</sup>', 'HSO4': 'HSO<sub>4</sub><sup>–</sup>, hydrogen sulfate', 'CELU': '&beta;(1→4) polymer of glucose', 'QTZ': 'SiO<sub>2</sub>', 'SIO2': 'SiO<sub>2</sub>'},
-
-	// These are the molecule names of residues that can be inserted (mol.name)
-	insertNames: ['water','zwit_aa_G','zwit_aa_A','zwit_PRO','zwit_aa_F','zwit_aa_Y','zwit_aa_W','zwit_aa_E','zwit_aa_K','zwit_aa_R','zwit_aa_S','zwit_aa_T','zwit_aa_V','glucose','methane','octane','dodecane','benzene','benzoate','benzamidine','NAFT','N2','O2','argon','sodium_ion','chloride_ion','magnesium','bisulfate'],
-
-	// How to map SVG group ids to molecules 
-	// (Assuming the scene svg exists)
-	sceneMoleculeMap: {'Air': 'air', 'Seawater': 'seawater', 'Wood': 'wood', 'Sand': 'sand'},
+    // Set the default parameters of nothing has been set
+    for (const parKey of Object.keys(defaultParameters)) {
+	if (SIM_PARAMETERS[parKey] == null) {
+	    SIM_PARAMETERS[parKey] = defaultParameters[parKey];
+	}
     }
+    // Fallback molecule if no molecule is defined
+    if (!Object.hasOwn(MOLECULE, 'default')) {
+	MOLECULE['default']={"name":"benzene","file":"mol_benzene.webdyn.js","num":12,"box":[30,30,30],"atom_coord":[-1.375,0,-0.002,-2.455,0,-0.001,-0.688,1.191,0.002,-1.227,2.126,-0.001,-0.688,-1.191,-0.001,-1.227,-2.126,0.004,0.688,1.191,-0.004,1.227,2.126,0.005,0.688,-1.191,-0.002,1.227,-2.126,-0.003,1.375,0,-0.001,2.455,0,-0.004],"par_type":["CG2R61","HGR61"],"par_mass":[12.011,1.008],"par_charge":[-0.115,0.115],"par_resname":["BENZ"],"par_name":["CE1","CG","CD1","HD1","CD2","HD2","HG","HE1","CE2","HE2","CZ","HZ"],"par_lj":[0.07,3.9848,0.03,2.7164],"par_bond":[22,2.1525,340,1.08,305,1.375,35,2.4162],"par_angle":[30,120,40,120],"par_dihedral":[4.2,2,180,3.1,2,180,2.4,2,180],"par_exclusion":[0,-1],"index_type":[0,1,0,1,0,1,0,1,0,1,0,1],"index_mass":[0,1,0,1,0,1,0,1,0,1,0,1],"index_charge":[0,1,0,1,0,1,0,1,0,1,0,1],"index_resname":[0,0,0,0,0,0,0,0,0,0,0,0],"index_name":[1,6,2,3,4,5,0,7,8,9,10,11],"index_lj":[0,1,0,1,0,1,0,1,0,1,0,1],"index_bond":[1,2,1,2,1,2,1,2,1,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,3,3,3],"index_angle":[0,1,0,1,0,1,0,1,0,1,0,0,1,0,0,0,0,0],"index_dihedral":[1,0,1,0,0,2,0,2,1,0,1,0,0,0,2,1,0,1,0,2,0,0,2,2],"index_exclusion":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"term_bond":[0,1,2,0,2,3,4,0,4,5,6,2,6,7,8,4,8,9,10,6,10,8,10,11,0,5,0,3,2,7,2,1,4,9,4,1,6,11,6,3,8,11,8,5,10,9,10,7,0,8,0,6,2,10,2,4,4,10,6,8],"term_angle":[0,4,5,0,4,8,0,2,3,0,2,6,2,6,7,2,6,10,2,0,1,2,0,4,4,8,9,4,8,10,4,0,1,6,10,11,6,10,8,6,2,3,8,10,11,8,4,5,10,8,9,10,6,7],"term_dihedral":[0,4,8,10,0,4,8,9,0,2,6,10,0,2,6,7,1,0,2,6,1,0,2,3,1,0,4,8,1,0,4,5,2,6,10,8,2,6,10,11,2,0,4,8,2,0,4,5,3,2,0,4,3,2,6,10,3,2,6,7,4,8,10,6,4,8,10,11,4,0,2,6,5,4,8,10,5,4,8,9,6,10,8,9,7,6,10,8,7,6,10,11,9,8,10,11],"term_exclusion":[0,1,0,2,0,3,0,4,0,5,0,6,0,8,1,2,1,4,2,3,2,4,2,6,2,7,2,10,3,6,4,5,4,8,4,9,4,10,5,8,6,7,6,8,6,10,6,11,7,10,8,9,8,10,8,11,9,10,10,11]};
+    }
+
+    // Make available all molecules loaded into MOLECULE
+    // This is used for making molecule thumbnails (selection box) and
+    // determining how big the bond, angle, dihedral, exclusion textures need to be.
+    SIM_PARAMETERS.moleculeNames = Object.keys(MOLECULE);
+    // Converts from resname to a displayed name
+    SIM_PARAMETERS.resNameMap = {'AR': 'argon', 'BAMI': 'benzamidinium(+)', 'BENZ': 'benzene', '3CB': 'benzoate(–)', 'C12': 'dodecane', 'BGLC': 'glucose', 'C': 'graphene', 'methane': 'METH', 'N2': 'dinitrogen', 'O2': 'dioxygen', 'GLY': 'glycine', 'PRO': 'proline', 'THR': 'threonine', 'ALA': 'alanine', 'GLU': 'glutamate(–)', 'PHE': 'phenylalanine', 'LYS': 'lysine(+)', 'ARG': 'arginine(+)', 'SER': 'serine', 'VAL': 'valine', 'TRP': 'tryptophan', 'TYR': 'tyrosine', 'TIP3': 'water', 'SPCF': 'water', 'C8': 'octane', 'NAFT': 'naphthalene', 'CLA': 'chloride ion(–)', 'SOD': 'sodium ion(+)', 'POT': 'potassium ion(+)', 'MG': 'magnesium ion(2+)', 'CAL': 'calcium ion(2+)', 'HSO4': 'bisulfate(–)', 'LIG2': 'lignin fragment', 'CELU': 'cellulose', 'QTZ': 'quartz', 'SIO2': 'silicon dioxide nanoparticle', 'ACET': 'acetate(–)', 'ACEH': 'acetic acid', 'IBPD': 'ibuprofen', 'METH': 'methane'};
+    // Converts from resname to an alternate displayed name
+    SIM_PARAMETERS.altNameMap = {'C12': 'C12 normal alkane', 'methane': 'CH<sub>4</sub>', 'N2': 'N<sub>2</sub>', 'O2': 'O<sub>2</sub>', 'GLY': 'Gly', 'PRO': 'Pro', 'THR': 'Thr', 'ALA': 'Ala', 'GLU': 'Glu', 'PHE': 'Phe', 'LYS': 'Lys', 'ARG': 'Arg', 'SER': 'Ser', 'VAL': 'Val', 'TRP': 'Trp', 'TYR': 'Tyr', 'TIP3': 'H<sub>2</sub>O', 'BGLC': 'grape sugar, dextrose', 'BENZ': 'C<sub>6</sub>H<sub>6</sub>', 'BAMI': 'benzamidine (protonated)', '3CB': 'benzoic acid (deprotonated)', 'C8': 'C8 normal alkane', 'CLA': 'Cl<sup>–</sup>', 'SOD': 'Na<sup>+</sup>', 'POT': 'K<sup>+</sup>', 'MG': 'Mg<sup>2+</sup>', 'CAL': 'Ca<sup>2+</sup>', 'HSO4': 'HSO<sub>4</sub><sup>–</sup>, hydrogen sulfate', 'CELU': '&beta;(1→4) polymer of glucose', 'QTZ': 'SiO<sub>2</sub>', 'SIO2': 'SiO<sub>2</sub>'};
+    // These are the molecule names of residues that can be inserted (mol.name)
+    SIM_PARAMETERS.insertNames = ['water','SPCF','zwit_aa_G','zwit_aa_A','zwit_PRO','zwit_aa_F','zwit_aa_Y','zwit_aa_W','zwit_aa_E','zwit_aa_K','zwit_aa_R','zwit_aa_S','zwit_aa_T','zwit_aa_V','glucose','methane','octane','dodecane','benzene','benzoate','benzamidine','NAFT','N2','O2','argon','sodium_ion','chloride_ion','magnesium','bisulfate','acetate','acetic_acid','ibuprofen'];
+    // How to map SVG group ids to molecules 
+    // (Assuming the scene svg exists)
+    SIM_PARAMETERS.sceneMoleculeMap = {'Air': 'air', 'Seawater': 'seawater', 'Wood': 'wood', 'Sand': 'sand'};
+
 
     // Set the default projection and camera
     class RenderInfo {
@@ -83,7 +96,8 @@
 
 	    // View
 	    this.near = simSys.radius;
-	    this.far = 5*simSys.box[2];
+	    const maxDimZ = (simSys.box[2]>maxDim) ? simSys.box[2] : maxDim;
+	    this.far = 5.0*maxDimZ;
 	    this.cameraMatrix = m4.lookAt(this.cameraPos, this.targetPos, this.up);
 	    this.viewMatrix = m4.inverse(this.cameraMatrix);
 	    this.projectionMatrix = m4.perspective(this.fieldOfView, this.aspect, this.near, this.far);
@@ -321,6 +335,7 @@
 	const simSys = new SimulationSystem(atomTexData.pos, atomTexData.nonbond, baseMolecule.box, simParams.timestep);
 	if (simParams.wallSpring != null) simSys.wallSpring = simParams.wallSpring;
 	if (simParams.restraintSpring != null) simSys.restraintSpring = simParams.restraintSpring;
+	if (simParams.wall != null) simSys.wall = simParams.wall;
 	simSys.setLangevin(simParams.temperature, simParams.langevinDamping);
 	console.log('box size:', simSys.box[0], simSys.box[1], simSys.box[2]);
 	console.log('wall position:', simSys.wall[0], simSys.wall[1], simSys.wall[2]);
@@ -963,7 +978,7 @@
 	const atomMaxDisplace = 2.0; // Assuming angstroms and high precision
 
 	// Simulation state
-	let currState = SimParameters.initialState;
+	let currState = SIM_PARAMETERS.initialState;
 	let lastState = SimState.none;
 	let thermostatOn = true;
 	let hideMaterial = -1; // Don't hide anything
@@ -993,7 +1008,7 @@
 	
 	function initSystem(baseMoleculeName) {
 	    // Prepare the texture data
-	    [atomTexData, simSys, thumbnails, insertThumbnails] = prepareAtoms(MOLECULE, SimParameters, baseMoleculeName);
+	    [atomTexData, simSys, thumbnails, insertThumbnails] = prepareAtoms(MOLECULE, SIM_PARAMETERS, baseMoleculeName);
 
 	    // Initialize the shader code
 	    shaders = new MDShaders(gl, atomTexData, atomMinDist, atomMaxDisplace);
@@ -1006,7 +1021,7 @@
 	    nextTexInfo = {posFB: textures.posFB1, pos: textures.pos1, randomFB: textures.randomFB1, random: textures.random1};
 
 	    // Initialize the view
-	    renderInfo = new RenderInfo(gl, simSys, SimParameters.fieldOfView, SimParameters.cameraPosFactor);
+	    renderInfo = new RenderInfo(gl, simSys, SIM_PARAMETERS.fieldOfView, SIM_PARAMETERS.cameraPosFactor, SIM_PARAMETERS.lightPosFactor, SIM_PARAMETERS.fadeFactor);
 
 	    // Pack these objects together to avoid function calls with too many parameters.
 	    // - Maybe the more idiomatic way in JavaScript is to define the functions here
@@ -1020,11 +1035,9 @@
 	    step = 0;
 	    dynamicsStep = 0;
 	    frame = 0;
-	    thermostatOn = (baseMoleculeName != 'air');
-	    updateThermostatCheck();
 	}
 	// Create the initial system based on the baseMolecule
-	initSystem(SimParameters.baseMoleculeName);
+	initSystem(SIM_PARAMETERS.baseMoleculeName);
 
 	
 	/////////////////////////////////////////////////////////////
@@ -1166,7 +1179,7 @@
 	function mousePoint() {
 	    // Get the mouse position
 	    const mouseMatrix = getMouseMatrix(gl, mouseInfo.x, mouseInfo.y, renderInfo);
-	    const renderInfoPick = new RenderInfo(gl, simSys, SimParameters.fieldOfView, SimParameters.cameraPosFactor);
+	    const renderInfoPick = new RenderInfo(gl, simSys, SIM_PARAMETERS.fieldOfView, SIM_PARAMETERS.cameraPosFactor);
 	    renderInfoPick.viewProjectionMatrix = mouseMatrix;
 
 	    // What atom is the mouse on?
@@ -1231,13 +1244,16 @@
 	    setSceneColors(sceneElementColors, null);
 	}
 	function clickSceneRegion(sceneGroup) {
-	    const map = SimParameters.sceneMoleculeMap;
+	    const map = SIM_PARAMETERS.sceneMoleculeMap;
 	    if (Object.hasOwn(map, sceneGroup.id)) {
 		const baseMoleculeName = map[sceneGroup.id];
 		console.log(`Clicked ${sceneGroup.id}, setting system to ${baseMoleculeName}`);
 		if (Object.hasOwn(MOLECULE, baseMoleculeName)) {
 		    // Reinitialize everything!
 		    initSystem(baseMoleculeName);
+		    // This is an inelegant hardcoded thermostat setting for air
+		    thermostatOn = (baseMoleculeName != 'air');
+		    updateThermostatCheck();
 		} else {
 		    console.log(`ERROR! baseMolecule ${baseMoleculeName} has not been defined. Make sure the name is correct and that the script containing this molecule has been loaded in the HTML file.`)
 		}
@@ -1404,7 +1420,7 @@
 	    // Check that it's a number
 	    if (isReal(inputTemperStr)) {
 		const temper = parseFloat(inputTemperStr);
-		simSys.setLangevin(temper, SimParameters.langevinDamping);
+		simSys.setLangevin(temper, SIM_PARAMETERS.langevinDamping);
 	    }
 	}
 	// Set the initial temperature in the input form
@@ -1479,15 +1495,15 @@
 	// Show a 2D diagram of the selected molecule
 	function updateSelectionPanel() {
 	    // Set the name of the selected residue
-	    if (Object.hasOwn(SimParameters.resNameMap, mouseInfo.resName)) {
-		mouseInfo.moleculeName = SimParameters.resNameMap[mouseInfo.resName];
+	    if (Object.hasOwn(SIM_PARAMETERS.resNameMap, mouseInfo.resName)) {
+		mouseInfo.moleculeName = SIM_PARAMETERS.resNameMap[mouseInfo.resName];
 		document.getElementById('moleculeName').innerHTML = mouseInfo.moleculeName;
 	    } else {
 		mouseInfo.moleculeName = mouseInfo.resName;
 		document.getElementById('moleculeName').innerHTML = `<i>${mouseInfo.resName}</i>`;
 	    }
-	    if (Object.hasOwn(SimParameters.altNameMap, mouseInfo.resName)) {
-		document.getElementById('alternateName').innerHTML = `other names: ${SimParameters.altNameMap[mouseInfo.resName]}`;
+	    if (Object.hasOwn(SIM_PARAMETERS.altNameMap, mouseInfo.resName)) {
+		document.getElementById('alternateName').innerHTML = `other names: ${SIM_PARAMETERS.altNameMap[mouseInfo.resName]}`;
 	    } else {
 		document.getElementById('alternateName').innerHTML = '&nbsp;';
 	    }
@@ -1560,7 +1576,13 @@
 	    const oldMaxCollisions = atomTexData.maxCollisions;
 
 	    // Update the texture data
-	    const insertPos = [-simSys.wall[0]*0.8+simSys.radius, -simSys.wall[1]*0.8+simSys.radius, 1.0];
+	    let insertPos = null;
+	    if (Object.hasOwn(SIM_PARAMETERS, 'insertPos')) {
+		insertPos = SIM_PARAMETERS.insertPos;
+		console.log(insertPos);
+	    } else {
+		insertPos = [-simSys.wall[0]*0.8+simSys.radius, -simSys.wall[1]*0.8+simSys.radius, 1.0];
+	    }
 	    const ok = atomTexData.insertMolecule(mol, currPos, insertPos);
 
 	    if (ok) {
@@ -1756,14 +1778,14 @@
 		
 		// Adjust runSteps to improve performance
 		if (currState != SimState.none) {
-		    if (framesPerSecond < 20.0) {
-			runSteps = Math.ceil(runSteps*framesPerSecond/20.0);
+		    if (framesPerSecond < 10.0) {
+			runSteps = Math.ceil(runSteps*framesPerSecond/10.0);
 		    } else if (framesPerSecond > 25.0) {
 			runSteps = Math.ceil(runSteps*framesPerSecond/25.0);
 		    }
 		    // Put some kind of sane limits on runSteps
-		    if (runSteps < 2) {
-			runSteps = 2;
+		    if (runSteps < 5) {
+			runSteps = 5;
 		    } else if (runSteps > 500) {
 			runSteps = 500;
 		    }
