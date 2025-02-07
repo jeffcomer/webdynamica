@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<!-- Copyright (C) 2024 Jeffrey Robert Comer
+
+ This file is part of WebDynamica, a browser-based interactive 
+ molecular dynamics program using WebGL 
+ This program is free software: you can redistribute it and/or modify it 
+ under the terms of the GNU General Public License as published by the Free 
+ Software Foundation, either version 3 of the License, or (at your option) 
+ any later version. 
+
+ This program is distributed in the hope that it will be useful, but WITHOUT 
+ ANY WARRANTY; without even the implied warranty of  MERCHANTABILITY or 
+ FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for 
+ more details. 
+
+ You should have received a copy of the GNU General Public License along with 
+ this program.  If not, see <https://www.gnu.org/licenses/>. -->
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebDynamica</title>
+
+    <link rel="stylesheet" href="../webdynamica.css">
+    
+  </head>
+  <body>
+    <div id="main" class="container" molecule="seawater">
+      
+      <div class="render">
+	<p id="header"><span id="systemName" class="white-back">Seawater</span></p>
+	<canvas id="canvas3d"></canvas>
+      </div>
+    
+    <div class="control">
+      <div id="statusBoxScene" class="element">
+	<fieldset><legend>Click parts of the scene</legend>
+	  <div class="scene">
+	    <!-- Inline SVG to permit easy access-->
+	    <svg xmlns="http://www.w3.org/2000/svg" style="enable-background:new 0 0 40 40;" viewBox="0 0 40 40" y="0px" x="0px" id="scenesvg" version="1.1">
+	      <g id="Air">
+		<rect
+		  y="0.90147144"
+		  x="1"
+		  height="38.09853"
+		  width="38"
+		  id="rect871"
+		  style="opacity:1;fill:#ccc4ff;fill-opacity:1;stroke:none;stroke-width:11.98384953;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
+	      </g>
+
+	      <g id="Seawater">
+		<path
+		  id="path2"
+		  d="M15,39h24v-7.123C37.692,31.614,36.148,31,35,31c-1.458,0-3.563,1-5,1c-1.438,0-3.542-1-5-1  s-3.563,1-5,1c-1.438,0-5,0-5,0V39z" style="fill:#8BB7F0;" />
+		<path
+		  id="path4"
+		  d="M35,31c-1.458,0-3.563,1-5,1c-1.438,0-3.542-1-5-1s-3.563,1-5,1c-1.438,0-5,0-5,0v1c0,0,4.146,0,5,0   s1.82-0.272,2.754-0.535C23.566,32.237,24.406,32,25,32s1.434,0.237,2.246,0.465C28.18,32.728,29.146,33,30,33   s1.82-0.272,2.754-0.535C33.566,32.237,34.406,32,35,32s1.434,0.237,2.246,0.465C37.83,32.63,38.426,32.797,39,32.9v-1.023   C37.692,31.614,36.148,31,35,31z"
+		  style="fill:#4E7AB5;" />
+	      </g>
+
+	      <g id="Wood">
+		<path
+		  id="path8"
+		  d="M2.983,31.5c4.242-2.524,14.712-10.268,16.467-26h1.995c-1.926,17.873-9.552,25.068-10.627,26H2.983   z"
+		  style="fill:#A6714E;" />
+		<path
+		  id="path10"
+		  d="M20.886,6c-1.929,16.641-8.871,23.734-10.259,25H4.699c4.836-3.259,13.466-10.937,15.196-25H20.886    M22,5h-3C17,25,1,32,1,32h10C11,32,20,25,22,5L22,5z"
+		  style="fill:#7A4F34;" />
+
+		<path
+		  id="path14"
+		  d="M8.937,19.773c-1.706-3.613-1.875-7.001-0.439-9.416c1.711-2.878,5.7-4.527,11.595-4.813   C17.428,7.315,12.235,11.607,8.937,19.773z"
+		  style="fill:#BAE0BD;" />
+
+		<path
+		  id="path16"
+		  d="M18.368,6.174c-2.728,2.115-6.635,5.995-9.436,12.328c-1.197-3.052-1.214-5.853-0.004-7.889    C10.379,8.173,13.611,6.663,18.368,6.174 M22,5C5.714,5,5.125,13.875,9,21C13.375,9.125,22,5,22,5L22,5z"
+		  style="fill:#5E9C76;" />
+
+		<path
+		  id="path22"
+		  d="M1.571,11.745C2.075,7.23,5.299,1.5,13,1.5c3.694,0,6.865,2.28,7.415,3.999l-1.839-0.003   C11.818,5.496,7.854,5.786,1.571,11.745z"
+		  style="fill:#BAE0BD;" />
+
+		<path
+		  id="path24"
+		  d="M13,2c3.132,0,5.612,1.684,6.571,2.998l-0.995-0.002c-6.313,0-10.433,0.274-16.264,5.397    C3.253,6.379,6.416,2,13,2 M13,1C4,1,1,8.469,1,13c6.674-6.674,10.563-7.004,17.576-7.004C19.344,5.996,20.149,6,21,6    C21,4,17.347,1,13,1L13,1z"
+		  style="fill:#5E9C76;" />
+
+		<path
+		  id="path30"
+		  d="M28.736,21.4C28.39,17.871,27.06,9.426,22.131,5.551c4.482,0.269,7.385,1.6,8.64,3.965   C32.78,13.303,30.153,18.881,28.736,21.4z"
+		  style="fill:#BAE0BD;" />
+
+		<path
+		  id="path32"
+		  d="M23.568,6.183c3.461,0.432,5.729,1.626,6.76,3.565c1.591,2.995,0.062,7.26-1.286,10.002    C28.519,16.007,27.144,9.883,23.568,6.183 M20.354,5c7.464,3.817,8,18,8,18S40.541,5,20.354,5L20.354,5z"
+		  style="fill:#5E9C76;" />
+
+		<path
+		  id="path38"
+		  d="M35.48,13.766c-0.764-0.776-1.442-1.481-2.058-2.122c-4.539-4.718-5.844-6.075-12.857-6.142   C21.015,3.735,23.721,1.5,27.338,1.5C33.638,1.5,35.289,7.903,35.48,13.766z"
+		  style="fill:#BAE0BD;" />
+
+		<path
+		  id="path40"
+		  d="M27.338,2c3.202,0,6.968,1.893,7.577,10.471c-0.4-0.413-0.776-0.803-1.132-1.173    c-4.491-4.669-5.893-6.126-12.472-6.283C22.088,3.647,24.273,2,27.338,2 M27.338,1C22.991,1,20,3.965,20,6    c8.62,0,8.595,1.595,16,9C36,9,34.589,1,27.338,1L27.338,1z"
+		  style="fill:#5E9C76;" />
+	      </g>
+
+	      <g id="Sand">
+		<path
+		  id="path46"
+		  d="M1.5,38.5v-7h12.658c5.044,0,9.366,5.032,10.863,7H1.5z"
+		  style="fill:#F5CE85;" />
+		<path
+		  id="path48"
+		  d="M14.158,32c4.241,0,7.998,3.79,9.828,6H2v-6H14.158 M14.158,31C4.947,31,1,31,1,31v8h25   C26,39,20.737,31,14.158,31L14.158,31z"
+		  style="fill:#967A44;" />
+		<path
+		  id="path52"
+		  d="M24.75,39H1v-7c0,0,7,0,13,0S24.75,39,24.75,39z"
+		  style="fill:#F5CE85;" />
+	      </g>
+	    </svg>
+	    
+	    <p class="caption">
+	      Image by <a href="https://icons8.com">icons8</a>
+	    </p>
+	    <div>
+	</fieldset> 
+	</div>
+
+      
+
+      <div id="statusBox1" class="element center">
+	<fieldset><legend>Selection</legend>
+	  <div id="selectStatus">To move molecule, drag with mouse. Press "F" or "B" to move toward/away. Press "Del" or drag off the viewport to delete.</div>
+	  <!-- <div id="selectStatus">To move, drag with mouse. Press "F" or "B" to move toward/away.</div> -->
+	  <canvas id="selectCanvas" class="canvas2d" width="80px" height="80px"></canvas>
+	  <div><span id="moleculeName">None</span></div>
+	  <div id="alternateName">&nbsp;</div>
+	</fieldset>
+      </div>
+
+            <div id="statusBox0" class="element">
+	<fieldset><legend>WebDynamica 0.50</legend>
+	  <p>
+	    <button id="buttonPlay" onclick="window.togglePlay()">▶</button>
+	    <button id="buttonMinimize" onclick="window.pressMinimize()">Minimize energy</button>
+	  </p>
+	  <div>
+	    <table>
+	      <!-- <tr><th>State:</th><td id="tabState" class="center"></td></tr> -->
+	      <tr><th>Time (ps):</th><td id="tabTime"></td></tr>
+	      <tr><th>Energy (kcal/mol):</th><td id="tabEnergy"></td></tr>
+	      <tr><th>Kinetic Temp. (K):</th><td id="tabTemperature"></td></tr>
+	    </table>
+	  </div>
+	  <p>
+
+	    <label for="checkThermostat">Thermostat</label>
+	    <input type="checkbox" id="checkThermostat" name="checkThermostat" onclick="toggleThermostat()" />
+	    <label for="inputThermostat">Temp.(K)</label>
+	    <input type="text" id="inputThermostat" size="3" name="inputThermostat" />
+	    <label for="checkShowWater">Show water</label>
+	    <input type="checkbox" id="checkShowWater" name="checkShowWater" onclick="toggleShowWater()" />
+	  </p>
+	</fieldset>
+      </div>
+
+
+      <div id="statusBox2" class="element center">
+	<fieldset><legend>Insertion</legend>
+	  <canvas id="insertCanvas" class="canvas2d" width="80px" height="80px"></canvas><br>
+	  To insert: <span id="insertName">None</span>
+	  <p>
+	    <button id="buttonPrevious" onclick="window.pressPreviousMolecule()">Prev</button>
+	    <button id="buttonNext" onclick="window.pressNextMolecule()">Next</button>
+	  </p>
+	  <p>
+	    <button id="buttonInsert" class="buttonBig" onclick="window.pressInsertMolecule()">Insert</button>
+	  </p>
+	</fieldset>
+      </div>
+
+    </div>
+    </div>
+    
+
+
+    <div class="container">
+      <p id="status" class="status"></p>
+      <p>
+	<button id="buttonPDB" onclick="window.pressPDB()">Make PDB</button>
+      </p>
+      <!-- <p id="mouseStatus1" class="status"></p> -->
+      <!-- <p id="mouseStatus" class="status"></p> -->
+
+      <pre id="pdbData" class="status"></pre>
+    </div>
+
+    <!-- Load the molecules to be displayed or added -->
+    <script>const MOLECULE = {};</script>
+    <script src="../molecules.js"></script>
+
+    <!-- BASE MOLECULES -->
+    <script src="small_air.webdyn.js"></script>
+    <script src="seawater_sphere20.webdyn.js"></script>
+    <script src="less_cellulose-lignin.webdyn.js"></script>
+    <script src="quartz_silica_NP.webdyn.js"></script>
+
+    <!-- SIM_PARAMETERS must be set -->
+    <script>const SIM_PARAMETERS = {
+       baseMoleculeName: "seawater",
+    };
+    </script>
+    
+    <script src="../webgl-utils.js"></script>
+    <script src="../m4.js"></script>
+    <script src="../md_structures.js"></script>
+    <script src="../md_shaders.js"></script>
+    <script src="../webdynamica.js"></script>
+  </body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<!-- Copyright (C) 2024 Jeffrey Robert Comer
+
+ This file is part of WebDynamica, a browser-based interactive 
+ molecular dynamics program using WebGL 
+ This program is free software: you can redistribute it and/or modify it 
+ under the terms of the GNU General Public License as published by the Free 
+ Software Foundation, either version 3 of the License, or (at your option) 
+ any later version. 
+
+ This program is distributed in the hope that it will be useful, but WITHOUT 
+ ANY WARRANTY; without even the implied warranty of  MERCHANTABILITY or 
+ FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for 
+ more details. 
+
+ You should have received a copy of the GNU General Public License along with 
+ this program.  If not, see <https://www.gnu.org/licenses/>. -->
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebDynamica</title>
+
+    <link rel="stylesheet" href="../webdynamica.css">
+    
+  </head>
+  <body>
+    <div id="main" class="container" molecule="graph50_n2_chp14aa">
+      
+      <div class="render">
+	<p id="header"><span id="systemName" class="white-back">Cyclic Peptides on Graphene</span></p>
+	<canvas id="canvas3d"></canvas>
+      </div>
+    
+    <div class="control">
+
+            <div id="statusBox0" class="element">
+	<fieldset><legend>WebDynamica 0.50</legend>
+	  <p>
+	    <button id="buttonPlay" onclick="window.togglePlay()">▶</button>
+	    <button id="buttonMinimize" onclick="window.pressMinimize()">Minimize energy</button>
+	  </p>
+	  <div>
+	    <table>
+	      <!-- <tr><th>State:</th><td id="tabState" class="center"></td></tr> -->
+	      <tr><th>Time (ps):</th><td id="tabTime"></td></tr>
+	      <tr><th>Energy (kcal/mol):</th><td id="tabEnergy"></td></tr>
+	      <tr><th>Kinetic Temp. (K):</th><td id="tabTemperature"></td></tr>
+	    </table>
+	  </div>
+	  <p>
+
+	    <label for="checkThermostat">Thermostat</label>
+	    <input type="checkbox" id="checkThermostat" name="checkThermostat" onclick="toggleThermostat()" />
+	    <label for="inputThermostat">Temp.(K)</label>
+	    <input type="text" id="inputThermostat" size="3" name="inputThermostat" />
+	    <label for="checkShowWater">Show water</label>
+	    <input type="checkbox" id="checkShowWater" name="checkShowWater" onclick="toggleShowWater()" />
+	  </p>
+	</fieldset>
+      </div>
+
+      <div id="statusBox1" class="element center">
+	<fieldset><legend>Selection</legend>
+	  <div id="selectStatus">To move molecule, drag with mouse. Press "F" or "B" to move toward/away. Press "Del" or drag off the viewport to delete.</div>
+	  <!-- <div id="selectStatus">To move, drag with mouse. Press "F" or "B" to move toward/away.</div> -->
+	  <canvas id="selectCanvas" class="canvas2d" width="80px" height="80px"></canvas>
+	  <div><span id="moleculeName">None</span></div>
+	  <div id="alternateName">&nbsp;</div>
+	</fieldset>
+      </div>
+
+      <div id="statusBox2" class="element center">
+	<fieldset><legend>Insertion</legend>
+	  <canvas id="insertCanvas" class="canvas2d" width="80px" height="80px" onclick="window.pressInsertMolecule()"></canvas><br>
+	  To insert: <span id="insertName">None</span>
+	  <p>
+	    <button id="buttonPrevious" onclick="window.pressPreviousMolecule()">Prev</button>
+	    <button id="buttonNext" onclick="window.pressNextMolecule()">Next</button>
+	  </p>
+	  <p>
+	    <button id="buttonInsert" class="buttonBig" onclick="window.pressInsertMolecule()">Insert</button>
+	  </p>
+	</fieldset>
+      </div>
+
+    </div>
+    </div>
+    
+
+
+    <div class="container">
+      <p id="status" class="status"></p>
+      <p>
+	<button id="buttonPDB" onclick="window.pressPDB()">Make PDB</button>
+      </p>
+      <!-- <p id="mouseStatus1" class="status"></p> -->
+      <!-- <p id="mouseStatus" class="status"></p> -->
+
+      <pre id="pdbData" class="status"></pre>
+    </div>
+
+    <!-- Load the molecules to be displayed or added -->
+    <script>const MOLECULE = {};</script>
+    <script src="../molecules.js"></script>
+    
+    <!-- BASE MOLECULES -->
+    <script src="graph50_n2_chp14aa.webdyn.js"></script>
+
+    <!-- SIM_PARAMETERS must be set -->
+    <script>const SIM_PARAMETERS = {
+       baseMoleculeName: "graph50_n2_chp14aa",
+    };
+    </script>
+    
+    <script src="../webgl-utils.js"></script>
+    <script src="../m4.js"></script>
+    <script src="../md_structures.js"></script>
+    <script src="../md_shaders.js"></script>
+    <script src="../webdynamica.js"></script>
+  </body>
+</html>
