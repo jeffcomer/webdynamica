@@ -336,6 +336,8 @@ class AtomTextureData {
 	// Check if there is enough space in the textures to insert this molecule
 	const currNum = AtomTextureData.countActive(lastPosData);
 	const avail = this.size - currNum;
+	console.log('currNum: ', currNum);
+	console.log('avail: ', avail);
 	if (avail < mol.num) {
 	    console.log(`Warning! Could not insert molecule ${mol.name} because there isn't enough space in the textures (space avail: ${avail}, space needed: ${mol.num}). Molecule not added.`);
 	    return false;
@@ -348,17 +350,17 @@ class AtomTextureData {
 	    let start = -1;
 	    let size = 0;
 	    for (let ai = 0; ai < this.size; ai++) {
-		if (start < 0) {
-		    // We found an empty space?
-		    if (lastPosData[4*ai+3] == 0.0) start = ai;
+		if (lastPosData[4*ai+3] != 0.0) {
+		    // Non-empty
+		    start = -1;
 		} else {
-		    if (lastPosData[4*ai+3] == 0.0) {
-			const size = ai - start + 1;
-			// We've found a sufficiently large consecutive region
-			if (size >= mol.num) break;
-		    } else {
-			start = -1;
-		    }
+		    // Set a new start position if this is the first empty slot since the last occupied slot
+		    if (start < 0) start = ai;
+
+		    // Some molecules have length one, so it's okay if we just set start above.
+		    const size = ai - start + 1;
+		    // We've found a sufficiently large consecutive region
+		    if (size >= mol.num) break;
 		}
 	    }
 	    // Not found.

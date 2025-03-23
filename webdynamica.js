@@ -295,9 +295,12 @@
 	// Make the molecule thumbnails for the insertion panel
 	const insertThumbnails = [];
 	for (const name of simParams.insertNames) {
-	    if (!Object.hasOwn(MOLECULE, name)) {
-		console.log(`Warning! Molecule "${name}" from insertNames has not been defined. Make sure the name is correct and that the script containing this molecule has been loaded in the HTML file.`)
-	    } else {
+	    //if (!Object.hasOwn(MOLECULE, name)) {
+		//console.log(`Warning! Molecule "${name}" from insertNames has not been defined. Make sure the name is correct and that the script containing this molecule has been loaded in the HTML file.`)
+	    //}
+
+	    // Silently ignore molecules that haven't been loaded.
+	    if (Object.hasOwn(MOLECULE, name)) {
 		const mol = MOLECULE[name];
 		let resName = 'UNK';
 		let moleculeName = name;
@@ -1579,11 +1582,10 @@
 	    let insertPos = null;
 	    if (Object.hasOwn(SIM_PARAMETERS, 'insertPos')) {
 		insertPos = SIM_PARAMETERS.insertPos;
-		console.log(insertPos);
 	    } else {
 		insertPos = [-simSys.wall[0]*0.8+simSys.radius, -simSys.wall[1]*0.8+simSys.radius, 1.0];
 	    }
-	    const ok = atomTexData.insertMolecule(mol, currPos, insertPos);
+	    const ok = atomTexData.insertMolecule(mol, currPos, insertPos, true);
 
 	    if (ok) {
 		// Has the maximum number of collisions changed?
