@@ -1167,8 +1167,12 @@ class AtomTextureData {
 	color.Br = [0.54, 0.00, 0.12];
 	color.I =  [0.65, 0.00, 0.65];
 	//color.M =  [0.55, 0.55, 0.55];
-	color.M =  [0.88, 0.10, 0.88];
-	color.Ne =  [0.8, 0.4, 0.8];
+	color.M =  [0.6, 0.5, 0.6];
+	//color.M =  [0.88, 0.10, 0.88];
+	color.Cs  = [0.95, 0.8, 0.95];
+	color.Mg =  [0.6, 0.85, 0.6];
+	color.Ca =  [0.8, 0.95, 0.8];
+	color.Ne =  [0.55, 0.95, 0.95];
 	color.unknown = [0.2, 0.2, 0.2];
 	
 	if (type.match(/^CLG/) || type == 'CLA') {
@@ -1191,11 +1195,11 @@ class AtomTextureData {
 	} else if (type == 'LIT' || type.match(/^Li/)) {
 	    return color.M;
 	} else if (type == 'MG' || type.match(/^Mg/)) {
-	    return color.M;
+	    return color.Mg;
 	} else if (type == 'RUB' || type.match(/^Rb/)) {
 	    return color.M;
 	} else if (type == 'CES' || type.match(/^Cs/)) {
-	    return color.M;
+	    return color.Cs;
 	} else if (type == 'BAR' || type.match(/^Ba/)) {
 	    return color.M;
 	} else if (type == 'ZN' || type.match(/^Zn/)) {
@@ -1207,7 +1211,7 @@ class AtomTextureData {
 	} else if (type == 'Ni') {
 	    return color.M;
 	} else if (type == 'CAL') {
-	    return color.M;
+	    return color.Ca;
 	} else if (type == 'HE') {
 	    // probably won't catch hydrogen
 	    return color.Ne;
@@ -1218,6 +1222,7 @@ class AtomTextureData {
 	    // probably won't catch nitrogen
 	    return color.Ne;
 	} else if (type.match(/^A/)) {
+	    // argon 
 	    return color.Ne;
 	} else if (type.match(/^H/)) {
 	    return color.H
