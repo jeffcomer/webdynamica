@@ -90,7 +90,7 @@ class AtomTextureData {
 
 	// Special residue names
 	this.waterResNames = ['TIP3', 'TIP4', 'SPCE', 'SPCF', 'WAT', 'HOH'];
-	this.backgroundResNames = ['C', 'GRPH', 'CELU', 'QTZ'];
+	this.backgroundResNames = ['C', 'GRPH', 'CELU', 'QTZ', 'MICA'];
 	
 	// Create the texture data 
 	// Define the dimensions of the textures
