@@ -1385,20 +1385,27 @@
 	    updatePlayButton();
 	}
 	function updatePlayButton() {
-	    if (currState == SimState.running) {
-		// Pause symbol
-		document.getElementById("buttonPlay").innerHTML = "||";
-		// Looks bad on mobile
-		// document.getElementById("buttonPlay").innerHTML = "&#9612;&nbsp;&#9612;";
-	    } else {
-		// Play symbol
-		document.getElementById("buttonPlay").innerHTML = "▶";
+	    const buttonPlay = document.getElementById("buttonPlay");
+	    const buttonMinimize = document.getElementById("buttonMinimize");
+
+	    if (buttonPlay != null) {
+		if (currState == SimState.running) {
+		    // Pause symbol
+		    document.getElementById("buttonPlay").innerHTML = "||";
+		    // Looks bad on mobile
+		    // document.getElementById("buttonPlay").innerHTML = "&#9612;&nbsp;&#9612;";
+		} else {
+		    // Play symbol
+		    document.getElementById("buttonPlay").innerHTML = "▶";
+		}
 	    }
-	    
-	    if (currState == SimState.minimizing) {
-		document.getElementById("buttonMinimize").innerHTML = "Minimizing...";
-	    } else {
-		document.getElementById("buttonMinimize").innerHTML = "Minimize energy";
+
+	    if (buttonMinimize != null) {
+		if (currState == SimState.minimizing) {
+		    document.getElementById("buttonMinimize").innerHTML = "Minimizing...";
+		} else {
+		    document.getElementById("buttonMinimize").innerHTML = "Minimize energy";
+		}
 	    }
 	}
 	updatePlayButton();
@@ -1410,7 +1417,7 @@
 	}
 	function updateThermostatCheck() {
 	    const checkbox =  document.getElementById('checkThermostat');
-	    checkbox.checked = thermostatOn;
+	    if (checkbox != null) checkbox.checked = thermostatOn;
 	}
 	updateThermostatCheck();
 
@@ -1419,15 +1426,19 @@
 	    return !isNaN(str) && !isNaN(parseFloat(str));
 	}
 	function updateThermostatTemperature() {
-	    const inputTemperStr = document.getElementById('inputThermostat').value;
-	    // Check that it's a number
-	    if (isReal(inputTemperStr)) {
-		const temper = parseFloat(inputTemperStr);
-		simSys.setLangevin(temper, SIM_PARAMETERS.langevinDamping);
+	    const inputThermostat = document.getElementById('inputThermostat');
+	    if (inputThermostat != null) {
+		const inputTemperString = inputThermostat.value;
+		// Check that it's a number
+		if (isReal(inputTemperString)) {
+		    const temper = parseFloat(inputTemperString);
+		    simSys.setLangevin(temper, SIM_PARAMETERS.langevinDamping);
+		}
 	    }
 	}
 	// Set the initial temperature in the input form
-	document.getElementById('inputThermostat').value = simSys.temper;
+	const inputThermostat = document.getElementById('inputThermostat');
+	if (inputThermostat != null) inputThermostat.value = simSys.temper;
 
 	// Run a shader to reset the velocities
 	window.pressResetVelocities = function() {
@@ -1438,8 +1449,9 @@
 	// Handle the insertion panel
 	let insertIndex = 0;
 	function updateInsertPanel() {
-	    if (insertIndex < insertThumbnails.length) {
-		document.getElementById('insertName').textContent = insertThumbnails[insertIndex].name;
+	    const insertName = document.getElementById('insertName');
+	    if (insertIndex < insertThumbnails.length && insertName != null) {
+		insertName.textContent = insertThumbnails[insertIndex].name;
 		insertThumbnails[insertIndex].draw(insertContext2d);
 	    }
 	}
@@ -1466,7 +1478,8 @@
 	    const currPos = extractData(env, currTexInfo.pos, textures.width, textures.height);
 	    atomTexData.setPositions(currPos);
 	    const pdbData = document.getElementById('pdbData');
-	    pdbData.innerHTML = "PDB_DATA:\n" + atomTexData.writePDB();
+	    if (pdbData != null)
+		pdbData.innerHTML = "PDB_DATA:\n" + atomTexData.writePDB();
 	}
 
 	// Display water or not
@@ -1476,7 +1489,8 @@
 	}
 	function updateShowWaterCheck() {
 	    const checkbox =  document.getElementById('checkShowWater');
-	    checkbox.checked = (hideMaterial != MaterialEnum.water);
+	    if (checkbox != null)
+		checkbox.checked = (hideMaterial != MaterialEnum.water);
 	}
 	updateShowWaterCheck();
 
@@ -1497,25 +1511,34 @@
 
 	// Show a 2D diagram of the selected molecule
 	function updateSelectionPanel() {
+	    const moleculeName = document.getElementById('moleculeName');
+	    const alternateName = document.getElementById('alternateName');
+	    
 	    // Set the name of the selected residue
 	    if (Object.hasOwn(SIM_PARAMETERS.resNameMap, mouseInfo.resName)) {
 		mouseInfo.moleculeName = SIM_PARAMETERS.resNameMap[mouseInfo.resName];
-		document.getElementById('moleculeName').innerHTML = mouseInfo.moleculeName;
+		if (moleculeName != null) 
+		    moleculeName.innerHTML = mouseInfo.moleculeName;
 	    } else {
 		mouseInfo.moleculeName = mouseInfo.resName;
-		document.getElementById('moleculeName').innerHTML = `<i>${mouseInfo.resName}</i>`;
+		if (moleculeName != null) 
+		    moleculeName.innerHTML = `<i>${mouseInfo.resName}</i>`;
 	    }
 	    if (Object.hasOwn(SIM_PARAMETERS.altNameMap, mouseInfo.resName)) {
-		document.getElementById('alternateName').innerHTML = `other names: ${SIM_PARAMETERS.altNameMap[mouseInfo.resName]}`;
+		if (alternateName != null)
+		    alternateName.innerHTML = `other names: ${SIM_PARAMETERS.altNameMap[mouseInfo.resName]}`;
 	    } else {
-		document.getElementById('alternateName').innerHTML = '&nbsp;';
+		if (alternateName != null)
+		    alternateName.innerHTML = '&nbsp;';
 	    }
 	    
 	    // Draw the selected residue in the 2d canvas
-	    if (Object.hasOwn(thumbnails, mouseInfo.resName)) {
-		thumbnails[mouseInfo.resName].draw(selectContext2d);
-	    } else {
-		selectContext2d.clearRect(0, 0, selectContext2d.canvas.width, selectContext2d.canvas.height);
+	    if (selectContext2d != null) {
+		if (Object.hasOwn(thumbnails, mouseInfo.resName)) {
+		    thumbnails[mouseInfo.resName].draw(selectContext2d);
+		} else {
+		    selectContext2d.clearRect(0, 0, selectContext2d.canvas.width, selectContext2d.canvas.height);
+		}
 	    }
 	}
 	
@@ -1629,7 +1652,9 @@
 	    if (validSelection()) {		
 		// Show the deletion in the selection status
 		const selectStatus = document.getElementById('selectStatus');
-		selectStatus.innerHTML = `<span class="selectDelete">Deleting <b>${mouseInfo.moleculeName}</b><br>&nbsp;</span>`;
+		if (selectStatus != null ) {
+		    selectStatus.innerHTML = `<span class="selectDelete">Deleting <b>${mouseInfo.moleculeName}</b><br>&nbsp;</span>`;
+		}
 		selectStatusTime = performance.now();
 		
 		// Get the newest positions
@@ -1666,8 +1691,14 @@
 	let sumSimTime = 0.0;
 
 	// 2D canvas for molecule identification
-	const selectContext2d = document.getElementById('selectCanvas').getContext('2d');
-	const insertContext2d = document.getElementById('insertCanvas').getContext('2d');
+	const selectCanvas = document.getElementById('selectCanvas');
+	let selectContext2d = null;
+	if (selectCanvas != null) selectContext2d = selectCanvas.getContext('2d');
+	
+	const insertCanvas = document.getElementById('insertCanvas');
+	let insertContext2d = null;
+	if (insertCanvas != null) insertContext2d = insertCanvas.getContext('2d');
+
 	updateInsertPanel();
 
 	///////////////////////////////////////////////////////////////////////////////
@@ -1759,7 +1790,7 @@
 		statusText += `<br>Framerate: ${framesPerSecond.toFixed(2)} 1/s`;
 		statusText += `<br>Steps per frame: ${runSteps}`;
 		const status = document.getElementById("status");
-		status.innerHTML = statusText;
+		if (status != null) status.innerHTML = statusText;
 
 		// Get the kinetic and potential energies from the textures
 		// This comes after the swap, so we use currTexInfo
@@ -1774,9 +1805,11 @@
 		// Write the status table
 		let prec = 2;
 		//document.getElementById("tabState").innerHTML = `${SimStateName[currState]}`;
-		document.getElementById("tabTime").innerHTML = `${t_ps.toFixed(prec)}`;
-		document.getElementById("tabEnergy").innerHTML = `${enerTotal.toFixed(prec)}`;
-		document.getElementById("tabTemperature").innerHTML = `${temperKin.toFixed(prec)}`;
+		if (document.getElementById("tabTime") != null) {
+		    document.getElementById("tabTime").innerHTML = `${t_ps.toFixed(prec)}`;
+		    document.getElementById("tabEnergy").innerHTML = `${enerTotal.toFixed(prec)}`;
+		    document.getElementById("tabTemperature").innerHTML = `${temperKin.toFixed(prec)}`;
+		}
 		
 		// Adjust runSteps to improve performance
 		if (currState != SimState.none) {
@@ -1806,21 +1839,23 @@
 		
 	    // Set the selection status
 	    const selectStatus = document.getElementById('selectStatus');
-	    if (mouseInfo.dragging) {
-		selectStatusTime = performance.now();
-		selectStatus.innerHTML = `<span class="selectDrag">Dragging ${mouseInfo.moleculeName}</span><br>&nbsp;`;
-	    } else if (mouseInfo.fragment >= 0 && mouseInfo.material != MaterialEnum.background) {
-		selectStatusTime = performance.now();
-		// selectStatus.innerHTML = `<span class="selectSelect">Selecting fragment ${mouseInfo.fragment}</span><br>&nbsp;`;
-		selectStatus.innerHTML = `<span class="selectSelect">Selecting ${mouseInfo.moleculeName}</span><br>&nbsp;`;
-	    } else {
-		// No selection action
-		// Leave the last update for a little bit
-		if (performance.now() - selectStatusTime > 1000.0) {
+	    if (selectStatus != null) {
+		if (mouseInfo.dragging) {
 		    selectStatusTime = performance.now();
-		    //selectStatus.innerHTML = `To move molecule, drag with mouse. Press "F" or "B" to move toward/away. Press "Del" or drag off the viewport to delete.`;
-		    selectStatus.innerHTML = 'Drag to move. Drag off or "del" to delete. F/B: move away/toward';
-		}		
+		    selectStatus.innerHTML = `<span class="selectDrag">Dragging ${mouseInfo.moleculeName}</span><br>&nbsp;`;
+		} else if (mouseInfo.fragment >= 0 && mouseInfo.material != MaterialEnum.background) {
+		    selectStatusTime = performance.now();
+		    // selectStatus.innerHTML = `<span class="selectSelect">Selecting fragment ${mouseInfo.fragment}</span><br>&nbsp;`;
+		    selectStatus.innerHTML = `<span class="selectSelect">Selecting ${mouseInfo.moleculeName}</span><br>&nbsp;`;
+		} else {
+		    // No selection action
+		    // Leave the last update for a little bit
+		    if (performance.now() - selectStatusTime > 1000.0) {
+			selectStatusTime = performance.now();
+			//selectStatus.innerHTML = `To move molecule, drag with mouse. Press "F" or "B" to move toward/away. Press "Del" or drag off the viewport to delete.`;
+			selectStatus.innerHTML = 'Drag to move. Drag off or "del" to delete. F/B: move away/toward';
+		    }		
+		}
 	    }
 	    
 	    // Set mouse status info
