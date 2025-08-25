@@ -716,7 +716,7 @@ class MolecularStructure {
 		kind = KIND.dihedral;
 		bodies = 4;
 		pars = [3];
-	    } else if (line.match('^IMPROPER')) {
+	    } else if (line.match('^IMPROPER') || line.match('^IMPHI')) {
 		section = 'IMPROPERS';
 		kind = KIND.improper;
 		bodies = 4;
