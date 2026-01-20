@@ -22,7 +22,8 @@
 ;(function() {
     // Note that you must set SIM_PARAMETERS and MOLECULE
     'use strict';
-
+    const WEBDYNAMICA_VERSION = '0.61';
+    
     // Enumeration of different simulation states
     const SimState = {none: 0, running: 1, minimizing: 2};
     const SimStateName = ['paused', 'running', 'minimizing'];
@@ -38,6 +39,7 @@
 	fieldOfView: 25.0, // in degrees
 	wallSpring: 2.0, // in kcal mol^-1 Å^-2
 	restraintSpring: 10.0, // in kcal mol^-1 Å^-2
+	dielectric: 1.0, // unitless, divides the Coulomb constant
 
 	// Interface parameters
 	additionalCapacity: 300, // extra atoms in texture (allows adding more molecules)
@@ -47,6 +49,16 @@
 	cameraPosFactor: 0.4, // how far is camera in Lz units
 	lightPosFactor: 0.7, // how light is camera in Lz units
 	fadeFactor: 0.7, // how light is camera in max dimension (max(L)) units
+
+	// Converts from resname to a displayed name
+	resNameMap: {'AR': 'argon', 'BAMI': 'benzamidinium(+)', 'BENZ': 'benzene', '3CB': 'benzoate(–)', 'C12': 'dodecane', 'BGLC': 'glucose', 'C': 'graphene', 'methane': 'METH', 'N2': 'dinitrogen', 'O2': 'dioxygen', 'GLY': 'glycine', 'PRO': 'proline', 'THR': 'threonine', 'ALA': 'alanine', 'GLU': 'glutamate(–)', 'PHE': 'phenylalanine', 'LYS': 'lysine(+)', 'ARG': 'arginine(+)', 'SER': 'serine', 'VAL': 'valine', 'TRP': 'tryptophan', 'TYR': 'tyrosine', 'TIP3': 'water', 'SPCF': 'water', 'C8': 'octane', 'NAFT': 'naphthalene', 'CLA': 'chloride ion(–)', 'SOD': 'sodium ion(+)', 'POT': 'potassium ion(+)', 'MG': 'magnesium ion(2+)', 'CAL': 'calcium ion(2+)', 'HSO4': 'bisulfate(–)', 'LIG2': 'lignin fragment', 'CELU': 'cellulose', 'QTZ': 'quartz', 'SIO2': 'silicon dioxide nanoparticle', 'ACET': 'acetate(–)', 'ACEH': 'acetic acid', 'IBPD': 'ibuprofen', 'METH': 'methane', 'TCLE': '1,1,1-trichloroethane', 'TBRE': '1,1,1-tribromoethane', '18C6': '18-crown-6', 'CES': 'cesium ion(+)', 'NH4': 'ammonium(+)', 'MAMM': 'methylammonium(+)'},
+    // Converts from resname to an alternate displayed name
+	altNameMap: {'C12': 'C12 normal alkane', 'methane': 'CH<sub>4</sub>', 'N2': 'N<sub>2</sub>', 'O2': 'O<sub>2</sub>', 'GLY': 'Gly', 'PRO': 'Pro', 'THR': 'Thr', 'ALA': 'Ala', 'GLU': 'Glu', 'PHE': 'Phe', 'LYS': 'Lys', 'ARG': 'Arg', 'SER': 'Ser', 'VAL': 'Val', 'TRP': 'Trp', 'TYR': 'Tyr', 'TIP3': 'H<sub>2</sub>O', 'BGLC': 'grape sugar, dextrose', 'BENZ': 'C<sub>6</sub>H<sub>6</sub>', 'BAMI': 'benzamidine (protonated)', '3CB': 'benzoic acid (deprotonated)', 'C8': 'C8 normal alkane', 'CLA': 'Cl<sup>–</sup>', 'SOD': 'Na<sup>+</sup>', 'POT': 'K<sup>+</sup>', 'MG': 'Mg<sup>2+</sup>', 'CAL': 'Ca<sup>2+</sup>', 'HSO4': 'HSO<sub>4</sub><sup>–</sup>, hydrogen sulfate', 'CELU': '&beta;(1→4) polymer of glucose', 'QTZ': 'SiO<sub>2</sub>', 'SIO2': 'SiO<sub>2</sub>', '18C6': '18-6 crown ether', 'CES': 'Cs<sup>+</sup>', 'NH4': 'NH<sub>4</sub><sup>+</sup>'},
+	// These are the molecule names of residues that can be inserted (mol.name)
+	insertNames: ['SPCF','zwit_aa_G','zwit_aa_A','zwit_PRO','zwit_aa_F','zwit_aa_Y','zwit_aa_W','zwit_aa_E','zwit_aa_K','zwit_aa_R','zwit_aa_S','zwit_aa_T','zwit_aa_V','glucose','methane','octane','dodecane','benzene','benzoate','benzamidine','NAFT','N2','O2','argon','sodium_ion','chloride_ion','potassium','magnesium','calcium','cesium','ammonium','methylammonium','bisulfate','acetate','acetic_acid','ibuprofen','trichloroethane','tribromoethane','crown'],
+	// How to map SVG group ids to molecules 
+	// (Assuming the scene svg exists)
+	sceneMoleculeMap: {'Air': 'air', 'Seawater': 'seawater', 'Wood': 'wood', 'Sand': 'sand'},
     };
 
     // Set the default parameters of nothing has been set
@@ -64,17 +76,7 @@
     // This is used for making molecule thumbnails (selection box) and
     // determining how big the bond, angle, dihedral, exclusion textures need to be.
     SIM_PARAMETERS.moleculeNames = Object.keys(MOLECULE);
-    // Converts from resname to a displayed name
-    SIM_PARAMETERS.resNameMap = {'AR': 'argon', 'BAMI': 'benzamidinium(+)', 'BENZ': 'benzene', '3CB': 'benzoate(–)', 'C12': 'dodecane', 'BGLC': 'glucose', 'C': 'graphene', 'methane': 'METH', 'N2': 'dinitrogen', 'O2': 'dioxygen', 'GLY': 'glycine', 'PRO': 'proline', 'THR': 'threonine', 'ALA': 'alanine', 'GLU': 'glutamate(–)', 'PHE': 'phenylalanine', 'LYS': 'lysine(+)', 'ARG': 'arginine(+)', 'SER': 'serine', 'VAL': 'valine', 'TRP': 'tryptophan', 'TYR': 'tyrosine', 'TIP3': 'water', 'SPCF': 'water', 'C8': 'octane', 'NAFT': 'naphthalene', 'CLA': 'chloride ion(–)', 'SOD': 'sodium ion(+)', 'POT': 'potassium ion(+)', 'MG': 'magnesium ion(2+)', 'CAL': 'calcium ion(2+)', 'HSO4': 'bisulfate(–)', 'LIG2': 'lignin fragment', 'CELU': 'cellulose', 'QTZ': 'quartz', 'SIO2': 'silicon dioxide nanoparticle', 'ACET': 'acetate(–)', 'ACEH': 'acetic acid', 'IBPD': 'ibuprofen', 'METH': 'methane', 'TCLE': '1,1,1-trichloroethane', 'TBRE': '1,1,1-tribromoethane', '18C6': '18-crown-6', 'CES': 'cesium ion(+)', 'NH4': 'ammonium(+)', 'MAMM': 'methylammonium(+)'};
-    // Converts from resname to an alternate displayed name
-    SIM_PARAMETERS.altNameMap = {'C12': 'C12 normal alkane', 'methane': 'CH<sub>4</sub>', 'N2': 'N<sub>2</sub>', 'O2': 'O<sub>2</sub>', 'GLY': 'Gly', 'PRO': 'Pro', 'THR': 'Thr', 'ALA': 'Ala', 'GLU': 'Glu', 'PHE': 'Phe', 'LYS': 'Lys', 'ARG': 'Arg', 'SER': 'Ser', 'VAL': 'Val', 'TRP': 'Trp', 'TYR': 'Tyr', 'TIP3': 'H<sub>2</sub>O', 'BGLC': 'grape sugar, dextrose', 'BENZ': 'C<sub>6</sub>H<sub>6</sub>', 'BAMI': 'benzamidine (protonated)', '3CB': 'benzoic acid (deprotonated)', 'C8': 'C8 normal alkane', 'CLA': 'Cl<sup>–</sup>', 'SOD': 'Na<sup>+</sup>', 'POT': 'K<sup>+</sup>', 'MG': 'Mg<sup>2+</sup>', 'CAL': 'Ca<sup>2+</sup>', 'HSO4': 'HSO<sub>4</sub><sup>–</sup>, hydrogen sulfate', 'CELU': '&beta;(1→4) polymer of glucose', 'QTZ': 'SiO<sub>2</sub>', 'SIO2': 'SiO<sub>2</sub>', '18C6': '18-6 crown ether', 'CES': 'Cs<sup>+</sup>', 'NH4': 'NH<sub>4</sub><sup>+</sup>'};
-    // These are the molecule names of residues that can be inserted (mol.name)
-    SIM_PARAMETERS.insertNames = ['SPCF','zwit_aa_G','zwit_aa_A','zwit_PRO','zwit_aa_F','zwit_aa_Y','zwit_aa_W','zwit_aa_E','zwit_aa_K','zwit_aa_R','zwit_aa_S','zwit_aa_T','zwit_aa_V','glucose','methane','octane','dodecane','benzene','benzoate','benzamidine','NAFT','N2','O2','argon','sodium_ion','chloride_ion','potassium','magnesium','calcium','cesium','ammonium','methylammonium','bisulfate','acetate','acetic_acid','ibuprofen','trichloroethane','tribromoethane','crown'];
-    // How to map SVG group ids to molecules 
-    // (Assuming the scene svg exists)
-    SIM_PARAMETERS.sceneMoleculeMap = {'Air': 'air', 'Seawater': 'seawater', 'Wood': 'wood', 'Sand': 'sand'};
-
-
+    
     // Set the default projection and camera
     class RenderInfo {
 	constructor(gl, simSys, fieldOfViewDegrees, cameraPosFactor = 0.4, lightPosFactor = 0.7, fadeFactor = 0.8) {
@@ -339,6 +341,7 @@
 	if (simParams.wallSpring != null) simSys.wallSpring = simParams.wallSpring;
 	if (simParams.restraintSpring != null) simSys.restraintSpring = simParams.restraintSpring;
 	if (simParams.wall != null) simSys.wall = simParams.wall;
+	if (simParams.dielectric != null) simSys.dielectric = simParams.dielectric;
 	simSys.setLangevin(simParams.temperature, simParams.langevinDamping);
 	console.log('box size:', simSys.box[0], simSys.box[1], simSys.box[2]);
 	console.log('wall position:', simSys.wall[0], simSys.wall[1], simSys.wall[2]);
@@ -601,7 +604,7 @@
 	gl.uniform3f(locs.box, ...env.simSys.box);
 	gl.uniform3f(locs.wall, ...env.simSys.wall);
 	gl.uniform1f(locs.wallSpring, env.simSys.wallSpring);
-	gl.uniform1f(locs.coulomb, env.simSys.coulomb);
+	gl.uniform1f(locs.coulomb, env.simSys.coulomb/env.simSys.dielectric);
 	gl.drawArrays(gl.TRIANGLES, 0, 6);  // Draw 2 triangles (6 vertices)
     }
 
@@ -980,10 +983,13 @@
 	// units 'sqrt(k*370*K/(hydrogen*u))' 'Å/fs' = 0.01747031
 	const atomMaxDisplace = 2.0; // Assuming angstroms and high precision
 
+	// Display version
+	const versionElement = document.getElementById("WebDynamicaVersion");
+	versionElement.textContent = "WebDynamica " + WEBDYNAMICA_VERSION.toString();
+	
 	// Simulation state
 	let currState = SIM_PARAMETERS.initialState;
 	let lastState = SimState.none;
-	let thermostatOn = true;
 	let hideMaterial = -1; // Don't hide anything
 	
 	/////////////////////////////////////////////////////////////
@@ -1005,11 +1011,23 @@
 	let step = 0;
 	let dynamicsStep = 0;
 	let frame = 0;
-
+	let baseMoleculeIndex = 0; // Allow the base molecule to be a list that is indexed
+	
 	// Initialize the mouse/pointer/touch data
 	let mouseInfo = new MouseInfo();
 	
-	function initSystem(baseMoleculeName) {
+	function initSystem(baseMoleculeNamePar) {
+	    // Create the initial system based on the baseMolecule
+	    // Base molecule can be a string (single value) or an array of strings that get cycled through
+	    let baseMoleculeName = 'default';
+	    if (Array.isArray(baseMoleculeNamePar)) {
+	      	if (baseMoleculeIndex >= baseMoleculeNamePar.length) baseMoleculeIndex = 0;
+	     	baseMoleculeName = baseMoleculeNamePar[baseMoleculeIndex];
+	     	baseMoleculeIndex++;
+	     } else {
+	     	baseMoleculeName = baseMoleculeNamePar;
+	     }
+	    
 	    // Prepare the texture data
 	    [atomTexData, simSys, thumbnails, insertThumbnails] = prepareAtoms(MOLECULE, SIM_PARAMETERS, baseMoleculeName);
 
@@ -1255,7 +1273,7 @@
 		    // Reinitialize everything!
 		    initSystem(baseMoleculeName);
 		    // This is an inelegant hardcoded thermostat setting for air
-		    thermostatOn = (baseMoleculeName != 'air');
+		    SIM_PARAMETERS.thermostatOn = (baseMoleculeName != 'air');
 		    updateThermostatCheck();
 		} else {
 		    console.log(`ERROR! baseMolecule ${baseMoleculeName} has not been defined. Make sure the name is correct and that the script containing this molecule has been loaded in the HTML file.`)
@@ -1334,17 +1352,25 @@
 		 // right
 		 displaceSel([dispMag, 0, 0]);
                  break;
-            
-             case 'f':
+
+	     case 'f':
+             case 't':
 		 // toward
 		 displaceSel([0, 0, dispMag]);
 		 break;
 
 	     case 'b':
+	     case 'y':
 		 // away
 		 displaceSel([0, 0, -dispMag]);
 		 break;
 
+	     case 'r':
+		 // rotate
+		 renderInfo.viewMatrix = m4.xRotate(renderInfo.viewMatrix,-0.5*Math.PI);
+		 renderInfo.viewProjectionMatrix = m4.multiply(renderInfo.projectionMatrix, renderInfo.viewMatrix);
+		 break;
+		 
 	     case 'Delete':
 	     case 'Backspace':
 		 deleteSelection();
@@ -1412,12 +1438,12 @@
 
 	// Handle thermostat
 	window.toggleThermostat = function() {
-	    thermostatOn = !thermostatOn;
+	    SIM_PARAMETERS.thermostatOn = !SIM_PARAMETERS.thermostatOn;
 	    updateThermostatCheck();
 	}
 	function updateThermostatCheck() {
 	    const checkbox =  document.getElementById('checkThermostat');
-	    if (checkbox != null) checkbox.checked = thermostatOn;
+	    if (checkbox != null) checkbox.checked = SIM_PARAMETERS.thermostatOn;
 	}
 	updateThermostatCheck();
 
@@ -1507,6 +1533,10 @@
 		currState = SimState.none;
 	    }
 	    updatePlayButton()
+	}
+	// Restart the simulation, incrementing the 
+	window.pressRestart = function() {
+	    initSystem(SIM_PARAMETERS.baseMoleculeName);
 	}
 
 	// Show a 2D diagram of the selected molecule
@@ -1714,7 +1744,7 @@
 		// Velocity Verlet for Langevin dynamics from
 		// Izaguirre et al. (2001) Langevin stabilization of molecular dynamics. J. Chem. Phys. 114(5), 2090–2098. DOI: 10.1063/1.1332996
 		for (let i = 0; i < runSteps; i++) {
-		    if (thermostatOn) {
+		    if (SIM_PARAMETERS.thermostatOn) {
 			// First half-kick
 			// We correctly use same random numbers as the previous second half-kick
 			runUpdateVelocityShader(env, shaders.firstKick, shaders.firstKickLocs, textures.vel,
@@ -1733,7 +1763,7 @@
    		    runForceShader(env, nextTexInfo.pos, textures.forceFB, true);
 
 		    // Second half-kick
-		    if (thermostatOn) {
+		    if (SIM_PARAMETERS.thermostatOn) {
 			// The second half-kick uses the t+dt random numbers
     			runUpdateRandomShader(env, currTexInfo.random, nextTexInfo.randomFB);
 			runUpdateVelocityShader(env, shaders.secondKick, shaders.secondKickLocs, textures.halfVel,
@@ -1853,7 +1883,7 @@
 		    if (performance.now() - selectStatusTime > 1000.0) {
 			selectStatusTime = performance.now();
 			//selectStatus.innerHTML = `To move molecule, drag with mouse. Press "F" or "B" to move toward/away. Press "Del" or drag off the viewport to delete.`;
-			selectStatus.innerHTML = 'Drag to move. Drag off or "del" to delete. F/B: move away/toward';
+			selectStatus.innerHTML = 'Drag to move. Drag off or "del" to delete. T/Y: move away/toward';
 		    }		
 		}
 	    }
