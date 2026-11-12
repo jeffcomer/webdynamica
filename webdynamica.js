@@ -22,7 +22,11 @@
 ;(function() {
     // Note that you must set SIM_PARAMETERS and MOLECULE
     'use strict';
-    const WEBDYNAMICA_VERSION = '0.61';
+    const WEBDYNAMICA_VERSION = "0.7.0";
+    // Set version number
+    const appTitle = document.getElementById("WebDynamicaVersion");
+    appTitle.textContent = "WebDynamica " + WEBDYNAMICA_VERSION;
+    
     
     // Enumeration of different simulation states
     const SimState = {none: 0, running: 1, minimizing: 2};
@@ -983,10 +987,6 @@
 	// units 'sqrt(k*370*K/(hydrogen*u))' 'Å/fs' = 0.01747031
 	const atomMaxDisplace = 2.0; // Assuming angstroms and high precision
 
-	// Display version
-	const versionElement = document.getElementById("WebDynamicaVersion");
-	versionElement.textContent = "WebDynamica " + WEBDYNAMICA_VERSION.toString();
-	
 	// Simulation state
 	let currState = SIM_PARAMETERS.initialState;
 	let lastState = SimState.none;
