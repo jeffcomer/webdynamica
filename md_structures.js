@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////
-// Copyright (C) 2024 Jeffrey Robert Comer
+// Copyright (C) 2026 Jeffrey Robert Comer
 //
 // This file is part of WebDynamica, a browser-based interactive
 // molecular dynamics program using WebGL
@@ -1370,6 +1370,12 @@ class SimulationSystem {
     }
 
     setLangevin(langevinTemper, langevinDamping) {
+        if (!Number.isFinite(langevinTemper) || langevinTemper < 0) {
+            throw new RangeError('Temperature must be finite and nonnegative.');
+        }
+        if (!Number.isFinite(langevinDamping) || langevinDamping < 0) {
+            throw new RangeError('Langevin damping must be finite and nonnegative.');
+        }
 	this.temper = langevinTemper; // in kelvin
 	this.kT = this.boltz*this.temper; // in kcal/mol
 	this.langevinDamping = langevinDamping; // in ps^-1
