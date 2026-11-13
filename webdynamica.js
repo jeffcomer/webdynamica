@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////
-// Copyright (C) 2024 Jeffrey Robert Comer
+// Copyright (C) 2024-2026 Jeffrey Robert Comer
 //
 // This file is part of WebDynamica, a browser-based interactive
 // molecular dynamics program using WebGL
@@ -22,11 +22,7 @@
 ;(function() {
     // Note that you must set SIM_PARAMETERS and MOLECULE
     'use strict';
-    const WEBDYNAMICA_VERSION = "0.7.0";
-    // Set version number
-    const appTitle = document.getElementById("WebDynamicaVersion");
-    appTitle.textContent = "WebDynamica " + WEBDYNAMICA_VERSION;
-    
+    const WEBDYNAMICA_VERSION = '2.0.0';
     
     // Enumeration of different simulation states
     const SimState = {none: 0, running: 1, minimizing: 2};
@@ -46,18 +42,24 @@
 	dielectric: 1.0, // unitless, divides the Coulomb constant
 
 	// Interface parameters
+        stepsPerFrame: 20, // Initial count (1–maxStepsPerFrame); fixed when Auto is false
+        stepsPerFrameAuto: true, // Adjust step count dynamically for performance
+        maxStepsPerFrame: 1000, // Upper limit for both manual and automatic stepping
+        analysisFrames: 20, // Positive integer: frames between energy/performance updates
 	additionalCapacity: 300, // extra atoms in texture (allows adding more molecules)
 	initialState: SimState.running, // Running
 	
 	// Display parameters
+        centerOnMass: false, // Follow the non-background center of mass every frame
+        ambientOcclusionStrength: 1.5, // 0 disables AO
 	cameraPosFactor: 0.4, // how far is camera in Lz units
 	lightPosFactor: 0.7, // how light is camera in Lz units
 	fadeFactor: 0.7, // how light is camera in max dimension (max(L)) units
 
 	// Converts from resname to a displayed name
-	resNameMap: {'AR': 'argon', 'BAMI': 'benzamidinium(+)', 'BENZ': 'benzene', '3CB': 'benzoate(–)', 'C12': 'dodecane', 'BGLC': 'glucose', 'C': 'graphene', 'methane': 'METH', 'N2': 'dinitrogen', 'O2': 'dioxygen', 'GLY': 'glycine', 'PRO': 'proline', 'THR': 'threonine', 'ALA': 'alanine', 'GLU': 'glutamate(–)', 'PHE': 'phenylalanine', 'LYS': 'lysine(+)', 'ARG': 'arginine(+)', 'SER': 'serine', 'VAL': 'valine', 'TRP': 'tryptophan', 'TYR': 'tyrosine', 'TIP3': 'water', 'SPCF': 'water', 'C8': 'octane', 'NAFT': 'naphthalene', 'CLA': 'chloride ion(–)', 'SOD': 'sodium ion(+)', 'POT': 'potassium ion(+)', 'MG': 'magnesium ion(2+)', 'CAL': 'calcium ion(2+)', 'HSO4': 'bisulfate(–)', 'LIG2': 'lignin fragment', 'CELU': 'cellulose', 'QTZ': 'quartz', 'SIO2': 'silicon dioxide nanoparticle', 'ACET': 'acetate(–)', 'ACEH': 'acetic acid', 'IBPD': 'ibuprofen', 'METH': 'methane', 'TCLE': '1,1,1-trichloroethane', 'TBRE': '1,1,1-tribromoethane', '18C6': '18-crown-6', 'CES': 'cesium ion(+)', 'NH4': 'ammonium(+)', 'MAMM': 'methylammonium(+)'},
+	resNameMap: {'AR': 'argon', 'BAMI': 'benzamidinium(+)', 'BENZ': 'benzene', '3CB': 'benzoate(–)', 'C12': 'dodecane', 'BGLC': 'glucose', 'C': 'graphene', 'METH': 'methane', 'N2': 'dinitrogen', 'O2': 'dioxygen', 'GLY': 'glycine', 'PRO': 'proline', 'THR': 'threonine', 'ALA': 'alanine', 'GLU': 'glutamate(–)', 'GLN': 'glutamine', 'PHE': 'phenylalanine', 'LYS': 'lysine(+)', 'ARG': 'arginine(+)', 'SER': 'serine', 'VAL': 'valine', 'TRP': 'tryptophan', 'TYR': 'tyrosine', 'ADE': 'adenine', 'GUA': 'guanine', 'CYT': 'cytosine', 'THY': 'thymine', 'TIP3': 'water', 'SPCF': 'water', 'C8': 'octane', 'NAFT': 'naphthalene', 'CLA': 'chloride ion(–)', 'SOD': 'sodium ion(+)', 'POT': 'potassium ion(+)', 'MG': 'magnesium ion(2+)', 'CAL': 'calcium ion(2+)', 'HSO4': 'bisulfate(–)', 'LIG2': 'lignin fragment', 'CELU': 'cellulose', 'QTZ': 'quartz', 'SIO2': 'silicon dioxide nanoparticle', 'ACET': 'acetate(–)', 'ACEH': 'acetic acid', 'IBPD': 'ibuprofen(–)', 'METH': 'methane', 'TCLE': '1,1,1-trichloroethane', 'TBRE': '1,1,1-tribromoethane', '18C6': '18-crown-6', 'CES': 'cesium ion(+)', 'NH4': 'ammonium(+)', 'MAMM': 'methylammonium(+)', 'SUCR': 'sucrose', 'CO2': 'carbon dioxide', 'PRPA': 'propane', 'OLI': 'trioleic acid', 'ACETA': 'acetaminophen', 'AMOX': 'amoxicillin(–)', 'PENI': 'penicillin(–)', 'ASPR': 'aspirin(–)', 'VITC': 'vitamin C', 'VITD': 'vitamin D3', 'CITR': 'citrate', 'DOP': 'dopamine', 'CITN': 'citric acid', 'CHL1': 'cholesterol'},
     // Converts from resname to an alternate displayed name
-	altNameMap: {'C12': 'C12 normal alkane', 'methane': 'CH<sub>4</sub>', 'N2': 'N<sub>2</sub>', 'O2': 'O<sub>2</sub>', 'GLY': 'Gly', 'PRO': 'Pro', 'THR': 'Thr', 'ALA': 'Ala', 'GLU': 'Glu', 'PHE': 'Phe', 'LYS': 'Lys', 'ARG': 'Arg', 'SER': 'Ser', 'VAL': 'Val', 'TRP': 'Trp', 'TYR': 'Tyr', 'TIP3': 'H<sub>2</sub>O', 'BGLC': 'grape sugar, dextrose', 'BENZ': 'C<sub>6</sub>H<sub>6</sub>', 'BAMI': 'benzamidine (protonated)', '3CB': 'benzoic acid (deprotonated)', 'C8': 'C8 normal alkane', 'CLA': 'Cl<sup>–</sup>', 'SOD': 'Na<sup>+</sup>', 'POT': 'K<sup>+</sup>', 'MG': 'Mg<sup>2+</sup>', 'CAL': 'Ca<sup>2+</sup>', 'HSO4': 'HSO<sub>4</sub><sup>–</sup>, hydrogen sulfate', 'CELU': '&beta;(1→4) polymer of glucose', 'QTZ': 'SiO<sub>2</sub>', 'SIO2': 'SiO<sub>2</sub>', '18C6': '18-6 crown ether', 'CES': 'Cs<sup>+</sup>', 'NH4': 'NH<sub>4</sub><sup>+</sup>'},
+	altNameMap: {'C12': 'C12 normal alkane', 'methane': 'CH<sub>4</sub>', 'N2': 'N<sub>2</sub>', 'O2': 'O<sub>2</sub>', 'GLY': 'Gly', 'PRO': 'Pro', 'THR': 'Thr', 'ALA': 'Ala', 'GLU': 'Glu', 'GLN': 'Gln', 'PHE': 'Phe', 'LYS': 'Lys', 'ARG': 'Arg', 'SER': 'Ser', 'VAL': 'Val', 'TRP': 'Trp', 'TYR': 'Tyr', 'ADE': 'dA', 'GUA': 'dG', 'CYT': 'dC', 'THY': 'dT', 'TIP3': 'H<sub>2</sub>O', 'BGLC': 'grape sugar, dextrose', 'BENZ': 'C<sub>6</sub>H<sub>6</sub>', 'BAMI': 'benzamidine (protonated)', '3CB': 'benzoic acid (deprotonated)', 'C8': 'C8 normal alkane', 'CLA': 'Cl<sup>–</sup>', 'SOD': 'Na<sup>+</sup>', 'POT': 'K<sup>+</sup>', 'MG': 'Mg<sup>2+</sup>', 'CAL': 'Ca<sup>2+</sup>', 'HSO4': 'HSO<sub>4</sub><sup>–</sup>, hydrogen sulfate', 'CELU': '&beta;(1→4) polymer of glucose', 'QTZ': 'SiO<sub>2</sub>', 'SIO2': 'SiO<sub>2</sub>', '18C6': '18-6 crown ether', 'CES': 'Cs<sup>+</sup>', 'NH4': 'NH<sub>4</sub><sup>+</sup>', 'SUCR': 'table sugar', 'CO2': 'CO<sub>2</sub>', 'propane': 'C3H<sub>8</sub>', 'OLI': 'a triglyceride', 'ACETA': 'Tylenol', 'IBPD': 'Advil', 'AMOX': 'an antibiotic', 'PENI': 'an antibiotic', 'VITC': 'ascorbate', 'VIT3': 'cholecalciferol', 'CITR': 'citrate'},
 	// These are the molecule names of residues that can be inserted (mol.name)
 	insertNames: ['SPCF','zwit_aa_G','zwit_aa_A','zwit_PRO','zwit_aa_F','zwit_aa_Y','zwit_aa_W','zwit_aa_E','zwit_aa_K','zwit_aa_R','zwit_aa_S','zwit_aa_T','zwit_aa_V','glucose','methane','octane','dodecane','benzene','benzoate','benzamidine','NAFT','N2','O2','argon','sodium_ion','chloride_ion','potassium','magnesium','calcium','cesium','ammonium','methylammonium','bisulfate','acetate','acetic_acid','ibuprofen','trichloroethane','tribromoethane','crown'],
 	// How to map SVG group ids to molecules 
@@ -106,12 +108,38 @@
 	    this.far = 5.0*maxDimZ;
 	    this.cameraMatrix = m4.lookAt(this.cameraPos, this.targetPos, this.up);
 	    this.viewMatrix = m4.inverse(this.cameraMatrix);
+            // Preserve the initial light placement in camera coordinates.
+            this.lightCameraPos = m4.transformPoint(this.viewMatrix, this.lightPos);
 	    this.projectionMatrix = m4.perspective(this.fieldOfView, this.aspect, this.near, this.far);
 	    this.viewProjectionMatrix = m4.multiply(this.projectionMatrix, this.viewMatrix);
 	}
     }
 
     class MDTextures {
+    dispose(gl) {
+        for (const name of ['occlusionFB', 'posFB0', 'posFB1', 'extraPosFB', 'velFB', 'halfVelFB', 'forceFB', 'extraForceFB', 'randomFB0', 'randomFB1']) {
+            if (this[name]) gl.deleteFramebuffer(this[name]);
+            this[name] = null;
+        }
+        for (const name of ['pickFB']) {
+            if (this[name]) gl.deleteFramebuffer(this[name]);
+            this[name] = null;
+        }
+        for (const name of ['pickDepthBuffer']) {
+            if (this[name]) gl.deleteRenderbuffer(this[name]);
+            this[name] = null;
+        }
+        for (const name of ['unitSquareBuffer', 'sphereIdBuffer', 'spherePositionBuffer']) {
+            if (this[name]) gl.deleteBuffer(this[name]);
+            this[name] = null;
+        }
+        for (const name of ['bond', 'angle', 'dihedral', 'exclude', 'nonbond', 'hash', 'restrain', 'color', 'occlusion', 'select', 'pos0', 'pos1', 'extraPos', 'vel', 'halfVel', 'force', 'extraForce', 'random0', 'random1', 'pick']) {
+            if (this[name]) gl.deleteTexture(this[name]);
+            this[name] = null;
+        }
+    }
+
+
 	constructor(gl, atomTexData, shaders, simSys) {
 	    // Store the texture dimensions here also
 	    this.width = atomTexData.width;
@@ -143,6 +171,9 @@
 
 	    // Color and radius texture for rendering
 	    this.color = createTexture(gl, atomTexData.color, atomTexData);
+            this.occlusionDim = {width: 2 * this.width, height: this.height};
+            this.occlusion = createTexture(gl, new Float32Array(2 * atomTexData.pos.length), this.occlusionDim);
+            this.occlusionFB = createFramebuffer(gl, this.occlusion);
 
 	    // Selection texture [fragment, monomer, material, radius]
 	    this.select = createTexture(gl, atomTexData.select, atomTexData);
@@ -195,14 +226,14 @@
 	    this.velFB = createFramebuffer(gl, this.vel);
 	    this.halfVelFB = createFramebuffer(gl, this.halfVel);
 	    this.forceFB = createFramebuffer(gl, this.force);
-	    this.extraForceFB = createFramebuffer(gl, this.force);
+	    this.extraForceFB = createFramebuffer(gl, this.extraForce);
 	    this.randomFB0 = createFramebuffer(gl, this.random0);
 	    this.randomFB1 = createFramebuffer(gl, this.random1);
 
 	    // Picking molecule texture
 	    this.pickDim = {width: 1, height: 1};
 	    this.pick = createTexture(gl, null, this.pickDim);
-	    const depthBuffer = gl.createRenderbuffer();
+	    const depthBuffer = this.pickDepthBuffer = gl.createRenderbuffer();
 	    gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
 	    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, 1, 1);
 
@@ -218,11 +249,26 @@
 	    gl.bindBuffer(gl.ARRAY_BUFFER, this.unitSquareBuffer);
 	    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
 
-	    // Vertex buffer for the half-sphere model for rendering atoms
-	    this.sphereIdBuffer = gl.createBuffer();
-	    gl.bindBuffer(gl.ARRAY_BUFFER, this.sphereIdBuffer);
-	    const sphereId = new Float32Array([...Array(shaders.SPHERE_VERTICES*atomTexData.size).keys()]);
-	    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(sphereId), gl.STATIC_DRAW);
+        // Share one icosphere between atoms when instancing is available.
+        // The fallback supplies the same attributes to an ordinary draw call.
+        this.sphereInstancing = gl.getExtension('ANGLE_instanced_arrays');
+        const vertexCount = shaders.SPHERE_VERTICES;
+        const idCount = this.sphereInstancing ? atomTexData.size : atomTexData.size * vertexCount;
+        const atomIds = new Float32Array(idCount);
+        for (let i = 0; i < idCount; i++) {
+            atomIds[i] = this.sphereInstancing ? i : Math.floor(i / vertexCount);
+        }
+        this.sphereIdBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.sphereIdBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, atomIds, gl.STATIC_DRAW);
+        let positions = shaders.spherePositions;
+        if (!this.sphereInstancing) {
+            positions = new Float32Array(atomTexData.size * shaders.spherePositions.length);
+            for (let i = 0; i < atomTexData.size; i++) positions.set(shaders.spherePositions, i * shaders.spherePositions.length);
+        }
+        this.spherePositionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.spherePositionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 	}
     }
     
@@ -242,6 +288,68 @@
 	gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
 	gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
 	return fb;
+    }
+
+    function configureControlColumns() {
+        const control = document.querySelector('#main > .control');
+        if (!control) return;
+        const panels = Array.from(control.children);
+        if (!panels.length) return;
+        const columns = [document.createElement('div'), document.createElement('div')];
+        for (const column of columns) column.className = 'control-column';
+        columns[1].hidden = true;
+        for (const panel of panels) columns[0].append(panel);
+        control.append(...columns);
+        const desktop = window.matchMedia('(min-width: 900px)');
+        let scheduled = false;
+        let previousSplit = panels.length;
+        function layout() {
+            scheduled = false;
+            const height = control.clientHeight;
+            const gap = 8;
+            const heights = panels.map(panel => panel.getBoundingClientRect().height);
+            const total = heights.reduce((sum, value) => sum + value, 0) + gap * (panels.length - 1);
+            let split = panels.length;
+            if (desktop.matches && total > height + 1 && panels.length > 1) {
+                // Preserve reading order, choosing the split with the shortest taller column.
+                let bestHeight = Infinity;
+                for (let candidate = 1; candidate < panels.length; candidate++) {
+                    const left = heights.slice(0, candidate).reduce((sum, value) => sum + value, 0) + gap * (candidate - 1);
+                    const right = heights.slice(candidate).reduce((sum, value) => sum + value, 0) + gap * (panels.length - candidate - 1);
+                    if (Math.max(left, right) < bestHeight) {
+                        bestHeight = Math.max(left, right);
+                        split = candidate;
+                    }
+                }
+            }
+            const count = split === panels.length ? 1 : 2;
+            control.style.setProperty('--control-columns', String(count));
+            columns[1].hidden = count === 1;
+            if (split !== previousSplit) {
+                const focused = document.activeElement;
+                panels.forEach((panel, index) => {
+                    const column = columns[index < split ? 0 : 1];
+                    if (panel.parentElement !== column) column.append(panel);
+                });
+                // Reappend in source order when a fieldset moves back from column two.
+                for (const column of columns) {
+                    panels.filter(panel => panel.parentElement === column).forEach(panel => column.append(panel));
+                }
+                if (focused && control.contains(focused) && document.activeElement !== focused) focused.focus({preventScroll: true});
+                previousSplit = split;
+            }
+        }
+        function scheduleLayout() {
+            if (scheduled) return;
+            scheduled = true;
+            requestAnimationFrame(layout);
+        }
+        const observer = new ResizeObserver(scheduleLayout);
+        observer.observe(control);
+        for (const panel of panels) observer.observe(panel);
+        desktop.addEventListener('change', scheduleLayout);
+        window.addEventListener('resize', scheduleLayout);
+        scheduleLayout();
     }
 
     function prepareWebGL() {
@@ -310,10 +418,13 @@
 		const mol = MOLECULE[name];
 		let resName = 'UNK';
 		let moleculeName = name;
-		if (mol.par_resname != null) resName = mol.par_resname[0];
-		if (Object.hasOwn(simParams.resNameMap, resName)) {
-		    // Choose a better displayed name
-		    moleculeName = simParams.resNameMap[resName];
+		// If there is only one residue, try to find the better residue name
+		if (mol.par_resname != null && mol.par_resname.length == 1) {
+		    resName = mol.par_resname[0];
+		    if (Object.hasOwn(simParams.resNameMap, resName)) {
+			// Choose a better displayed name
+			moleculeName = simParams.resNameMap[resName];
+		    }
 		}
 		insertThumbnails.push(new MoleculeThumbnail(mol, moleculeName));
 	    }
@@ -363,6 +474,38 @@
     }
 
     
+    // Keep visual and accessible toggle state together; support older checkbox pages too.
+    function setToggleState(control, enabled) {
+        if (!control) return;
+        if (control.type === 'checkbox') control.checked = enabled;
+        else {
+            const pressed = String(enabled);
+            if (control.getAttribute('aria-pressed') !== pressed) control.setAttribute('aria-pressed', pressed);
+            const state = control.querySelector('.toggle-state');
+            const text = enabled ? 'On' : 'Off';
+            if (state && state.textContent !== text) state.textContent = text;
+        }
+    }
+
+    // Position w stores activity, nonbond x stores mass, and selection z stores material.
+    // Background atoms are excluded so the substrate does not dominate the center.
+    function calculateCenterOfMass(positions, nonbond, selection) {
+        const weighted = [0, 0, 0];
+        let totalMass = 0;
+        const fields = Math.min(positions.length, nonbond.length, selection.length);
+        for (let i = 0; i + 3 < fields; i += 4) {
+            const mass = nonbond[i];
+            if (selection[i + 2] === MaterialEnum.background) continue;
+            if (!(positions[i + 3] > 0) || !Number.isFinite(mass) || mass <= 0) continue;
+            if (![positions[i], positions[i + 1], positions[i + 2]].every(Number.isFinite)) continue;
+            totalMass += mass;
+            for (let axis = 0; axis < 3; axis++) weighted[axis] += mass * positions[i + axis];
+        }
+        if (!(totalMass > 0) || !Number.isFinite(totalMass)) return null;
+        const center = weighted.map(value => value / totalMass);
+        return center.every(Number.isFinite) ? center : null;
+    }
+
     function calcKineticEnergy(currPos, currVel, currNonbond, simSys) {
 	const n = Math.floor(currPos.length/4);
 	let activeNum = 0;
@@ -424,9 +567,31 @@
 	return viewProjectionMatrix; 
     }
 
+    // Convert canvas-relative mouse coordinates to a world-space drag target.
+    // Intersect the pointer ray with a screen-parallel plane through the picked atom.
+    // Keep the initial grab offset so the molecule does not jump when dragging begins.
+    function mouseToWorldDragTarget(gl, viewProjectionMatrix, cameraMatrix, mouseInfo) {
+        const inverse = m4.inverse(viewProjectionMatrix);
+        const anchor = mouseInfo.dragAtomPos;
+        const normal = [cameraMatrix[8], cameraMatrix[9], cameraMatrix[10]];
+        function onPlane(x, y) {
+            const nx = 2 * x / gl.canvas.clientWidth - 1;
+            const ny = 1 - 2 * y / gl.canvas.clientHeight;
+            const near = m4.transformPoint(inverse, [nx, ny, -1]);
+            const far = m4.transformPoint(inverse, [nx, ny, 1]);
+            const ray = Array.from(far, (v, i) => v - near[i]);
+            const dot = (a, b) => a.reduce((sum, v, i) => sum + v * b[i], 0);
+            const distance = dot(anchor.map((v, i) => v - near[i]), normal) / dot(ray, normal);
+            return Array.from(near, (v, i) => v + distance * ray[i]);
+        }
+        const start = onPlane(mouseInfo.dragOriginX, mouseInfo.dragOriginY);
+        const current = onPlane(mouseInfo.x, mouseInfo.y);
+        return anchor.map((v, i) => v + current[i] - start[i]);
+    }
+
     // Structure for following the mouse
     class MouseInfo {
-	constructor(mouseScale = 50.0) {
+	constructor() {
 	    this.x = -1; // mouse x coordinate in the canvas in pixels
 	    this.y = -1; // mouse y coordinate in the canvas in pixels
 	    this.atom = -1; // atom index
@@ -436,10 +601,6 @@
 	    this.type = 'UNK'; // atom type
 	    this.resName = 'none'; // residue name
 	    this.moleculeName = 'none'; // molecule name
-	    this.worldX = 0;
-	    this.worldY = 0;
-	    this.worldZ = 0;
-	    this.scale = mouseScale;
             this.atomX = 0;
 	    this.atomY = 0;
 	    this.atomZ = 0;
@@ -450,25 +611,6 @@
 	    this.minMove = 4; 
 	}
 
-	// Attempt to calculate the xy-position of the mouse pointer in the simulation world 
-	// There is something wrong with the logic, since we don't get the correct positions
-	// and have to use a fudge factor (this.scale)
-	toWorld(gl, viewProjectionMatrix, overrideMouseX, overrideMouseY) {
-	    const mouseX = overrideMouseX ?? this.x;
-	    const mouseY = overrideMouseY ?? this.y;
-	    
-	    const M = viewProjectionMatrix;
-	    // Convert to unit square coordinates
-	    const mx = (2.0*mouseX - gl.canvas.clientWidth)/gl.canvas.clientWidth;
-	    const my = -(2.0*mouseY - gl.canvas.clientHeight)/gl.canvas.clientHeight;
-
-	    const worldX = (M[13]*M[4] - M[12]*M[5] + (M[4]*M[9] - M[5]*M[8])*this.atomZ + M[5]*mx - M[4]*my)/(M[0]*M[5] - M[1]*M[4]);
-	    const worldY = (M[1]*M[12] - M[0]*M[13] + (M[1]*M[8] - M[0]*M[9])*this.atomZ + M[0]*my - M[1]*mx)/(M[0]*M[5] - M[1]*M[4]);
-
-	    this.worldX = worldX;
-	    this.worldY = worldY;
-	    this.worldZ = this.atomZ;
-	}
     }
 
 
@@ -482,21 +624,41 @@
     function drawAtoms(env, program, progLocs, posTex, selectInfo, renderInfo, frameBuffer, overrideWidth, overrideHeight) {
 	const gl = env.gl; // WebGL context
 	const textures = env.textures; // MDTextures object
+        const aoStrength = selectInfo.aoStrength ?? defaultParameters.ambientOcclusionStrength;
 
+	// Resize before reading the drawing-buffer dimensions.
+	webglUtils.resizeCanvasToDisplaySize(gl.canvas);
 	const canvasWidth = overrideWidth || gl.canvas.width;
 	const canvasHeight = overrideHeight || gl.canvas.height;
-	
-	// Check for resizing of the canvas
-	webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+
+	// Keep the scene proportional when its display area changes size.
+	// Picking uses its own projection for the one-pixel framebuffer.
+	if (frameBuffer == null) {
+	    const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+	    if (aspect !== renderInfo.aspect) {
+		renderInfo.aspect = aspect;
+		renderInfo.projectionMatrix = m4.perspective(renderInfo.fieldOfView, aspect, renderInfo.near, renderInfo.far);
+		renderInfo.viewProjectionMatrix = m4.multiply(renderInfo.projectionMatrix, renderInfo.viewMatrix);
+	    }
+	}
 	gl.viewport(0, 0, canvasWidth, canvasHeight);
 
 	// Write to the canvas or a framebuffer (for framebuffer = null)
 	gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
 	
-	// The sphere vertex id buffer 
+	if (frameBuffer == null && aoStrength > 0) {
+            runOcclusionShader(env, posTex, selectInfo.hideMaterial);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+            gl.viewport(0, 0, canvasWidth, canvasHeight);
+        }
+
+        // Atom indices and unit-icosphere positions 
 	gl.bindBuffer(gl.ARRAY_BUFFER, env.textures.sphereIdBuffer);
 	gl.enableVertexAttribArray(progLocs.id);
 	gl.vertexAttribPointer(progLocs.id,1,gl.FLOAT,false,0,0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, textures.spherePositionBuffer);
+        gl.enableVertexAttribArray(progLocs.spherePosition);
+        gl.vertexAttribPointer(progLocs.spherePosition, 3, gl.FLOAT, false, 0, 0);
 	
 	// Clear the canvas and depth buffer
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -518,7 +680,11 @@
 	
 	/////////////////////////
 	// Draw the scene
+        gl.activeTexture(gl.TEXTURE0 + 3);
+        gl.bindTexture(gl.TEXTURE_2D, textures.occlusion);
 	gl.useProgram(program);
+        if (progLocs.occlusionTex != null) gl.uniform1i(progLocs.occlusionTex, 3);
+        if (progLocs.aoStrength != null) gl.uniform1f(progLocs.aoStrength, aoStrength);
 	gl.uniform1i(progLocs.posTex, posTexIndex);
 	gl.uniform1i(progLocs.colorTex, colorTexIndex);
 	gl.uniform1i(progLocs.selectTex, selectTexIndex);
@@ -532,11 +698,46 @@
 	gl.uniform1f(progLocs.fadeDistance, renderInfo.fadeDistance);
 	gl.uniform3fv(progLocs.cameraPos, renderInfo.cameraPos);
 	gl.uniform3fv(progLocs.lightPos, renderInfo.lightPos);
-	gl.drawArrays(gl.TRIANGLES, 0, env.shaders.SPHERE_VERTICES*textures.size);
+	if (textures.sphereInstancing) {
+            const instancing = textures.sphereInstancing;
+            instancing.vertexAttribDivisorANGLE(progLocs.id, 1);
+            instancing.vertexAttribDivisorANGLE(progLocs.spherePosition, 0);
+            instancing.drawArraysInstancedANGLE(gl.TRIANGLES, 0, env.shaders.SPHERE_VERTICES, textures.size);
+            instancing.vertexAttribDivisorANGLE(progLocs.id, 0);
+        } else {
+            gl.drawArrays(gl.TRIANGLES, 0, env.shaders.SPHERE_VERTICES * textures.size);
+        }
+        // Simulation shaders use different buffers and attribute locations.
+        gl.disableVertexAttribArray(progLocs.id);
+        gl.disableVertexAttribArray(progLocs.spherePosition);
 
 	// These settings can interfere with data extraction
 	gl.disable(gl.CULL_FACE);
 	gl.disable(gl.DEPTH_TEST);
+    }
+
+    // Recompute object-space occlusion from current positions and visible materials.
+    function runOcclusionShader(env, posTex, hideMaterial) {
+        const {gl, textures, shaders} = env;
+        const locs = shaders.occlusionLocs;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, textures.occlusionFB);
+        gl.viewport(0, 0, textures.occlusionDim.width, textures.occlusionDim.height);
+        gl.disable(gl.DEPTH_TEST);
+        gl.disable(gl.CULL_FACE);
+        gl.useProgram(shaders.occlusion);
+        [posTex, textures.color, textures.select].forEach((texture, index) => {
+            gl.activeTexture(gl.TEXTURE0 + index);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+        });
+        gl.uniform1i(locs.posTex, 0);
+        gl.uniform1i(locs.colorTex, 1);
+        gl.uniform1i(locs.selectTex, 2);
+        gl.uniform1f(locs.hideMaterial, hideMaterial);
+        gl.bindBuffer(gl.ARRAY_BUFFER, textures.unitSquareBuffer);
+        gl.enableVertexAttribArray(locs.dummy);
+        gl.vertexAttribPointer(locs.dummy, 2, gl.FLOAT, false, 0, 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.disableVertexAttribArray(locs.dummy);
     }
 
     // Calculate the atomic forces using a shader
@@ -727,7 +928,7 @@
     // Displace selected atoms so that the picked atom is at the world position of the mouse
     // The world position of the mouse is the mouse position on the 2D rendered projection
     // transformed back into the three-dimensional simulation space.
-    // Since the mouse position only gives x and y, the z position is left free using axisMask
+    // The drag plane is computed in world coordinates before this shader runs.
     // Displace atoms using the x channel from the selectTex texture to mark atoms
     // Typically we'll select using the fragment texture
     // Implicit parameters: atomTexInfo, unitSquareBuffer 
@@ -736,8 +937,8 @@
 	const textures = env.textures; // MDTextures object
 	const shaders = env.shaders; // MDShaders object
 	
-	// Displace only in x and y, leaving z unchanged
-	const axisMask = [1, 1, 0];
+	// The screen-parallel drag plane can span all three world coordinates.
+	const axisMask = [1, 1, 1];
 	
 	// Render to the next random number texture
 	gl.bindFramebuffer(gl.FRAMEBUFFER, destPosFrameBuffer);
@@ -995,6 +1196,7 @@
 	/////////////////////////////////////////////////////////////
 	// Prepare the WebGL shaders and textures
         /////////////////////////////////////////////////////////////
+	configureControlColumns();
 	const gl = prepareWebGL();
 
 	// External variables set by initSystem()
@@ -1002,12 +1204,14 @@
 	let simSys = null;
 	let thumbnails = null;
 	let insertThumbnails = null;
+        let insertionPanelReady = false;
 	let shaders = null;
 	let textures = null;
 	let currTexInfo = null;
 	let nextTexInfo = null;
 	let renderInfo = null;
 	let env = null;
+        let forcesDirty = true;
 	let step = 0;
 	let dynamicsStep = 0;
 	let frame = 0;
@@ -1032,10 +1236,14 @@
 	    [atomTexData, simSys, thumbnails, insertThumbnails] = prepareAtoms(MOLECULE, SIM_PARAMETERS, baseMoleculeName);
 
 	    // Initialize the shader code
-	    shaders = new MDShaders(gl, atomTexData, atomMinDist, atomMaxDisplace);
+	    const oldShaders = shaders;
+            shaders = new MDShaders(gl, atomTexData, atomMinDist, atomMaxDisplace);
+            if (oldShaders) oldShaders.dispose(gl);
 
 	    // Initialize the textures and frame buffers
-	    textures = new MDTextures(gl, atomTexData, shaders, simSys);
+	    const oldTextures = textures;
+            textures = new MDTextures(gl, atomTexData, shaders, simSys);
+            if (oldTextures) oldTextures.dispose(gl);
 
 	    // Structure for cycling textures
 	    currTexInfo = {posFB: textures.posFB0, pos: textures.pos0, randomFB: textures.randomFB0, random: textures.random0};
@@ -1051,6 +1259,8 @@
 	    // what the inputs to the function are.
 	    // - However, we have to update this when we alter the textures
 	    env = {gl: gl, shaders: shaders, textures: textures, simSys: simSys};
+            refreshForces();
+            if (insertionPanelReady) updateInsertPanel();
 
 	    // Simulation step counters
 	    step = 0;
@@ -1094,6 +1304,196 @@
 	    setSceneColors(sceneElementColors);
 	}
 
+    // Orbit the camera around the system, independently of atom manipulation.
+    const aoStrength = Number.isFinite(SIM_PARAMETERS.ambientOcclusionStrength)
+        ? Math.max(0, SIM_PARAMETERS.ambientOcclusionStrength)
+        : defaultParameters.ambientOcclusionStrength;
+    let interactionMode = 'view';
+    gl.canvas.classList.add('view-mode');
+    let orbitPointer = null;
+
+    function finishOrbit() {
+        const pointer = orbitPointer;
+        orbitPointer = null;
+        if (pointer && gl.canvas.hasPointerCapture(pointer.id)) {
+            gl.canvas.releasePointerCapture(pointer.id);
+        }
+        gl.canvas.classList.remove('rotating', 'zooming');
+    }
+
+    function updateCamera() {
+        renderInfo.cameraMatrix = m4.lookAt(renderInfo.cameraPos, renderInfo.targetPos, renderInfo.up);
+        renderInfo.viewMatrix = m4.inverse(renderInfo.cameraMatrix);
+        // Keep lighting fixed on screen as the camera orbits the molecules.
+        renderInfo.lightPos = m4.transformPoint(renderInfo.cameraMatrix, renderInfo.lightCameraPos);
+        renderInfo.viewProjectionMatrix = m4.multiply(renderInfo.projectionMatrix, renderInfo.viewMatrix);
+    }
+
+    function orbitView(dx, dy) {
+        const camera = renderInfo.cameraMatrix;
+        const right = [camera[0], camera[1], camera[2]];
+        const up = [camera[4], camera[5], camera[6]];
+        const speed = Math.PI / Math.max(1, Math.min(gl.canvas.clientWidth, gl.canvas.clientHeight));
+        const rotation = m4.multiply(m4.axisRotation(up, -dx * speed), m4.axisRotation(right, -dy * speed));
+        const offset = renderInfo.cameraPos.map((v, i) => v - renderInfo.targetPos[i]);
+        const rotated = m4.transformDirection(rotation, offset);
+        renderInfo.cameraPos = Array.from(rotated, (v, i) => v + renderInfo.targetPos[i]);
+        renderInfo.up = Array.from(m4.transformDirection(rotation, renderInfo.up));
+        updateCamera();
+    }
+
+    function zoomView(dy) {
+        // Change apparent scale without moving the camera or the screen-fixed light.
+        const minScale = Math.tan(2.5 * Math.PI / 180);
+        const maxScale = Math.tan(50 * Math.PI / 180);
+        const scale = Math.tan(renderInfo.fieldOfView / 2) * Math.exp(dy * 0.005);
+        renderInfo.fieldOfView = 2 * Math.atan(Math.max(minScale, Math.min(maxScale, scale)));
+        renderInfo.aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+        renderInfo.projectionMatrix = m4.perspective(renderInfo.fieldOfView, renderInfo.aspect, renderInfo.near, renderInfo.far);
+        updateCamera();
+    }
+
+    function setInteractionMode(mode) {
+        if (mode === interactionMode) return;
+        finishOrbit();
+        mouseEnd();
+        interactionMode = mode;
+        gl.canvas.classList.toggle('view-mode', mode === 'view');
+        document.querySelectorAll('[data-interaction-mode]').forEach(button => {
+            button.setAttribute('aria-pressed', String(button.dataset.interactionMode === mode));
+        });
+        document.querySelectorAll('input[name="interactionMode"]').forEach(input => {
+            input.checked = input.value === mode;
+        });
+        const help = document.getElementById('interactionHelp');
+        if (help) help.textContent = mode === 'view'
+            ? 'Left-drag: rotate. Right-drag or scrollwheel: zoom. M or middle-click: move mode.'
+            : 'Left-drag a molecule to move it, or drag the background to rotate. Scrollwheel: zoom. "Del" or drag off viewport to delete molecule. V or middle-click: view mode.';
+    }
+    document.querySelectorAll('[data-interaction-mode]').forEach(button => {
+        button.addEventListener('click', () => setInteractionMode(button.dataset.interactionMode));
+    });
+    // Preserve compatibility with pages that still use the original radio controls.
+    document.querySelectorAll('input[name="interactionMode"]').forEach(input => {
+        input.addEventListener('change', () => {
+            if (input.checked) setInteractionMode(input.value);
+        });
+    });
+    let centerOnMassEnabled = SIM_PARAMETERS.centerOnMass === true;
+    const centerOnMassButton = document.getElementById('centerOnMass');
+    const viewCenterStatus = document.getElementById('viewCenterStatus');
+    function setCenterStatus(text) {
+        if (viewCenterStatus && viewCenterStatus.textContent !== text) viewCenterStatus.textContent = text;
+    }
+    function recenterView(positions) {
+        // Follow current GPU positions every drawn frame, excluding the substrate.
+        const currentPositions = positions ?? extractData(env, currTexInfo.pos, textures.width, textures.height);
+        const center = calculateCenterOfMass(currentPositions, atomTexData.nonbond, atomTexData.select);
+        if (!center) {
+            setCenterStatus('No non-background atoms to center.');
+            return;
+        }
+        const shift = center.map((value, axis) => value - renderInfo.targetPos[axis]);
+        renderInfo.cameraPos = renderInfo.cameraPos.map((value, axis) => value + shift[axis]);
+        renderInfo.targetPos = center;
+        updateCamera();
+        setCenterStatus('Following non-background center of mass.');
+    }
+    function updateCenterOnMassControl() {
+        if (!centerOnMassButton) return;
+        setToggleState(centerOnMassButton, centerOnMassEnabled);
+    }
+    updateCenterOnMassControl();
+    if (centerOnMassButton) centerOnMassButton.addEventListener('click', () => {
+        finishOrbit();
+        if (mouseInfo.down) mouseEnd();
+        centerOnMassEnabled = !centerOnMassEnabled;
+        updateCenterOnMassControl();
+        if (centerOnMassEnabled) recenterView();
+        else setCenterStatus('');
+    });
+    const resetViewButton = document.getElementById('resetView');
+    if (resetViewButton) resetViewButton.addEventListener('click', () => {
+        finishOrbit();
+        const initial = new RenderInfo(gl, simSys, SIM_PARAMETERS.fieldOfView, SIM_PARAMETERS.cameraPosFactor,
+            SIM_PARAMETERS.lightPosFactor, SIM_PARAMETERS.fadeFactor);
+        renderInfo.fieldOfView = initial.fieldOfView;
+        renderInfo.aspect = initial.aspect;
+        renderInfo.projectionMatrix = initial.projectionMatrix;
+        renderInfo.cameraPos = initial.cameraPos;
+        renderInfo.targetPos = initial.targetPos;
+        renderInfo.up = initial.up;
+        updateCamera();
+        if (centerOnMassEnabled) recenterView();
+        else setCenterStatus('');
+    });
+
+    gl.canvas.addEventListener('pointerdown', event => {
+        if (event.button === 1) {
+            event.preventDefault();
+            setInteractionMode(interactionMode === 'view' ? 'move' : 'view');
+            return;
+        }
+        if (orbitPointer || (event.button !== 0 && event.button !== 2)) return;
+        if (interactionMode === 'move') {
+            if (event.button !== 0 || !event.isPrimary || mouseInfo.down) return;
+            const rect = gl.canvas.getBoundingClientRect();
+            mouseInfo.x = event.clientX - rect.left;
+            mouseInfo.y = event.clientY - rect.top;
+            mousePoint();
+            if (validSelection()) return;
+        }
+        event.preventDefault();
+        orbitPointer = {id: event.pointerId, x: event.clientX, y: event.clientY, action: event.button === 2 ? 'zoom' : 'rotate'};
+        gl.canvas.setPointerCapture(event.pointerId);
+        gl.canvas.classList.add(orbitPointer.action === 'zoom' ? 'zooming' : 'rotating');
+    });
+    gl.canvas.addEventListener('pointermove', event => {
+        if (!orbitPointer || event.pointerId !== orbitPointer.id) return;
+        event.preventDefault();
+        if (orbitPointer.action === 'zoom') {
+            zoomView(event.clientY - orbitPointer.y);
+        } else {
+            orbitView(event.clientX - orbitPointer.x, event.clientY - orbitPointer.y);
+        }
+        orbitPointer.x = event.clientX;
+        orbitPointer.y = event.clientY;
+    });
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+        gl.canvas.addEventListener(type, event => {
+            if (orbitPointer && event.pointerId === orbitPointer.id) finishOrbit();
+        });
+    }
+    gl.canvas.addEventListener('contextmenu', event => {
+        if (interactionMode === 'view') event.preventDefault();
+    });
+    // Prevent middle-click autoscroll and legacy molecule handlers in either mode.
+    for (const type of ['mousedown', 'mouseup', 'auxclick']) {
+        gl.canvas.addEventListener(type, event => {
+            if (event.button !== 1) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }, {capture: true});
+    }
+    gl.canvas.addEventListener('wheel', event => {
+        // Keep browser zoom shortcuts available; ordinary scrolling over the view zooms it.
+        if (event.ctrlKey || event.metaKey || event.deltaY === 0) return;
+        event.preventDefault();
+        const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? gl.canvas.clientHeight : 1;
+        const pixels = event.deltaY * unit;
+        zoomView(Math.max(-80, Math.min(80, pixels * 0.25)));
+    }, {passive: false});
+    window.addEventListener('blur', finishOrbit);
+    // Suppress legacy atom handlers while orbiting (including generated mouse events).
+    for (const type of ['mousedown', 'mousemove', 'mouseup', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel']) {
+        gl.canvas.addEventListener(type, event => {
+            if (interactionMode !== 'view' && !orbitPointer) return;
+            if (event.cancelable) event.preventDefault();
+            event.stopImmediatePropagation();
+        }, {capture: true, passive: false});
+    }
+
+
 	// Handle movements of the mouse on the WebGL canvas or touchmove events
 	function mouseMove(event) {
 	    // Stop window from scrolling
@@ -1117,7 +1517,6 @@
 		mouseInfo.x = event.clientX - rect.left;
 		mouseInfo.y = event.clientY - rect.top;
 	    }
-	    mouseInfo.toWorld(gl, renderInfo.viewProjectionMatrix);
 
 
 	    // Dragging displacement
@@ -1130,7 +1529,7 @@
 		if (validSelection()) {
 		    // Set the state to dragging
 		    mouseInfo.dragging = true;
-		    if (currState == SimState.running ) {
+		    if (automaticSteps && currState == SimState.running ) {
 			// Minimization is a bit slower
 			runSteps = Math.ceil(runSteps/2);
 		    }
@@ -1139,8 +1538,7 @@
 
 		    // Move the molecular fragment
 		    // This is where we move the atoms to match the mouse
-		    const desiredPos = [mouseInfo.scale*mouseInfo.worldX, mouseInfo.scale*mouseInfo.worldY,
-					mouseInfo.worldZ];
+		    const desiredPos = mouseToWorldDragTarget(gl, renderInfo.viewProjectionMatrix, renderInfo.cameraMatrix, mouseInfo);
 		    const selectInfo = {id: mouseInfo.fragment, mask: [1, 0, 0, 0], atom: mouseInfo.atom};
 		    runDisplaceRelativeShader(env, currTexInfo.pos, selectInfo, desiredPos, nextTexInfo.posFB);
 		    //runDisplaceShader(env, currTexInfo.pos, selectInfo, [0.1, 0, 0], nextTexInfo.posFB); // test
@@ -1162,9 +1560,7 @@
 		mouseInfo.down = true;
 		mouseInfo.dragOriginX = mouseInfo.x;
 		mouseInfo.dragOriginY = mouseInfo.y;
-		mouseInfo.dragWorldX = mouseInfo.worldX;
-		mouseInfo.dragWorldY = mouseInfo.worldY;
-		mouseInfo.dragWorldZ = mouseInfo.atomZ;
+            mouseInfo.dragAtomPos = [mouseInfo.atomX, mouseInfo.atomY, mouseInfo.atomZ];
 	    }
 
 	    // Is the mouse outside the element? This can happen with touch screens
@@ -1191,7 +1587,7 @@
 		currState = lastState;
 		updatePlayButton();
 	    }
-	    mouseInfo = new MouseInfo(mouseInfo.scale);
+	    mouseInfo = new MouseInfo();
 	    updateSelectionPanel();
 	}
 
@@ -1214,15 +1610,6 @@
 	    mouseInfo.atomX = pickData[0];
 	    mouseInfo.atomY = pickData[1];
 	    mouseInfo.atomZ = pickData[2];
-	    // Calculate a fudge factor to convert the mouse position (in canvas pixels)
-	    // to the simulation world coordinates.
-	    // This is an empirical kludge since I haven't figured out how to revert the projection correctly
-	    if (Math.abs(mouseInfo.atomX) > 5.0) {
-		mouseInfo.scale = mouseInfo.atomX/mouseInfo.worldX;
-	    } else if (Math.abs(mouseInfo.atomY) > 5.0) {
-		mouseInfo.scale = mouseInfo.atomY/mouseInfo.worldY;
-	    }
-	    
 	    // Set the fragment, monomer, type, resName of the selected atom
 	    if (mouseInfo.atom >= 0 && mouseInfo.atom < atomTexData.typeList.length) {
 		// The fragment, monomer, type, and resName are taken from JavaScript arrays
@@ -1295,6 +1682,7 @@
 	    const rect =gl.canvas.getBoundingClientRect();
 	    mouseInfo.x = e.clientX - rect.left;
 	    mouseInfo.y = e.clientY - rect.top;
+	    mousePoint();
 
 	    // Pause the simulation
 	    lastState = currState;
@@ -1304,9 +1692,7 @@
 	    mouseInfo.down = true;
 	    mouseInfo.dragOriginX = mouseInfo.x;
 	    mouseInfo.dragOriginY = mouseInfo.y;
-	    mouseInfo.dragWorldX = mouseInfo.worldX;
-	    mouseInfo.dragWorldY = mouseInfo.worldY;
-	    mouseInfo.dragWorldZ = mouseInfo.atomZ;
+            mouseInfo.dragAtomPos = [mouseInfo.atomX, mouseInfo.atomY, mouseInfo.atomZ];
 	});
 	// We've released the mouse, so continue what we were doing
 	gl.canvas.addEventListener('mouseup', mouseEnd);
@@ -1331,8 +1717,27 @@
 	/////////////////////////////////////////////////////////////
 	// Handle keyboard input
 	window.addEventListener('keydown', function(event) {
+            const target = event.target;
+            const editing = target && (/^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName) || target.isContentEditable);
+            if (editing || event.isComposing || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+            const key = event.key.toLowerCase();
+            if (key === 'v' || key === 'm') {
+                event.preventDefault();
+                setInteractionMode(key === 'v' ? 'view' : 'move');
+                return;
+            }
+            if (interactionMode === 'view' || orbitPointer) return;
+            if (['w', 'a', 's', 'd', 'f', 't', 'b', 'y', 'delete', 'backspace'].includes(key)) {
+                if (!mouseInfo.down) {
+                    if (mouseInfo.x < 0 || mouseInfo.y < 0 ||
+                        mouseInfo.x >= gl.canvas.clientWidth || mouseInfo.y >= gl.canvas.clientHeight) return;
+                    mousePoint();
+                }
+                if (!validSelection()) return;
+                event.preventDefault();
+            }
 	    const dispMag = 2.0; // in Å
-	     switch (event.key) {
+	     switch (key) {
              case 'w':
 		 // up
 		 displaceSel([0, dispMag, 0]);
@@ -1367,12 +1772,11 @@
 
 	     case 'r':
 		 // rotate
-		 renderInfo.viewMatrix = m4.xRotate(renderInfo.viewMatrix,-0.5*Math.PI);
-		 renderInfo.viewProjectionMatrix = m4.multiply(renderInfo.projectionMatrix, renderInfo.viewMatrix);
+		 orbitView(0, 0.5 * Math.min(gl.canvas.clientWidth, gl.canvas.clientHeight));
 		 break;
 		 
-	     case 'Delete':
-	     case 'Backspace':
+	     case 'delete':
+	     case 'backspace':
 		 deleteSelection();
 		 break;
              }
@@ -1410,30 +1814,27 @@
 	    }
 	    updatePlayButton();
 	}
-	function updatePlayButton() {
-	    const buttonPlay = document.getElementById("buttonPlay");
-	    const buttonMinimize = document.getElementById("buttonMinimize");
-
-	    if (buttonPlay != null) {
-		if (currState == SimState.running) {
-		    // Pause symbol
-		    document.getElementById("buttonPlay").innerHTML = "||";
-		    // Looks bad on mobile
-		    // document.getElementById("buttonPlay").innerHTML = "&#9612;&nbsp;&#9612;";
-		} else {
-		    // Play symbol
-		    document.getElementById("buttonPlay").innerHTML = "▶";
-		}
-	    }
-
-	    if (buttonMinimize != null) {
-		if (currState == SimState.minimizing) {
-		    document.getElementById("buttonMinimize").innerHTML = "Minimizing...";
-		} else {
-		    document.getElementById("buttonMinimize").innerHTML = "Minimize energy";
-		}
-	    }
-	}
+    function updatePlayButton() {
+        const buttonPlay = document.getElementById('buttonPlay');
+        const buttonMinimize = document.getElementById('buttonMinimize');
+        const running = currState === SimState.running;
+        const minimizing = currState === SimState.minimizing;
+        if (buttonPlay) {
+            const icon = running
+                ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>'
+                : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>';
+            buttonPlay.innerHTML = icon + `<span>${running ? 'Pause' : 'Play'}</span>`;
+            buttonPlay.dataset.active = String(running);
+            buttonPlay.setAttribute('aria-label', running ? 'Pause simulation' : 'Play simulation');
+            buttonPlay.title = running ? 'Pause simulation' : 'Play simulation';
+        }
+        if (buttonMinimize) {
+            buttonMinimize.textContent = minimizing ? 'Minimizing…' : 'Minimize energy';
+            buttonMinimize.dataset.active = String(minimizing);
+            buttonMinimize.setAttribute('aria-label', minimizing ? 'Stop minimizing energy' : 'Minimize energy');
+            buttonMinimize.title = minimizing ? 'Stop minimizing energy' : 'Minimize the system’s energy';
+        }
+    }
 	updatePlayButton();
 
 	// Handle thermostat
@@ -1442,29 +1843,32 @@
 	    updateThermostatCheck();
 	}
 	function updateThermostatCheck() {
-	    const checkbox =  document.getElementById('checkThermostat');
-	    if (checkbox != null) checkbox.checked = SIM_PARAMETERS.thermostatOn;
+	    setToggleState(document.getElementById('checkThermostat'), SIM_PARAMETERS.thermostatOn);
 	}
 	updateThermostatCheck();
 
-	function isReal(str) {
-	    if (typeof str != 'string') return false;
-	    return !isNaN(str) && !isNaN(parseFloat(str));
-	}
-	function updateThermostatTemperature() {
-	    const inputThermostat = document.getElementById('inputThermostat');
-	    if (inputThermostat != null) {
-		const inputTemperString = inputThermostat.value;
-		// Check that it's a number
-		if (isReal(inputTemperString)) {
-		    const temper = parseFloat(inputTemperString);
-		    simSys.setLangevin(temper, SIM_PARAMETERS.langevinDamping);
-		}
-	    }
-	}
+    function updateThermostatTemperature() {
+        const input = document.getElementById('inputThermostat');
+        if (!input) return;
+        const text = input.value.trim();
+        const temperature = Number(text);
+        const valid = text !== '' && Number.isFinite(temperature) && temperature >= 0;
+        input.setCustomValidity(valid ? '' : 'Enter a finite temperature of 0 K or higher.');
+        input.setAttribute('aria-invalid', String(!valid));
+        if (valid && temperature !== simSys.temper) {
+            simSys.setLangevin(temperature, SIM_PARAMETERS.langevinDamping);
+        }
+    }
 	// Set the initial temperature in the input form
 	const inputThermostat = document.getElementById('inputThermostat');
-	if (inputThermostat != null) inputThermostat.value = simSys.temper;
+	if (inputThermostat != null) {
+            inputThermostat.value = simSys.temper;
+            inputThermostat.addEventListener('input', updateThermostatTemperature);
+            inputThermostat.addEventListener('change', () => {
+                updateThermostatTemperature();
+                if (!inputThermostat.validity.valid) inputThermostat.reportValidity();
+            });
+        }
 
 	// Run a shader to reset the velocities
 	window.pressResetVelocities = function() {
@@ -1472,31 +1876,107 @@
 	    runResetVelocityShader(env, currTexInfo.random, simSys.kT, textures.velFB);
 	}
 
-	// Handle the insertion panel
-	let insertIndex = 0;
-	function updateInsertPanel() {
-	    const insertName = document.getElementById('insertName');
-	    if (insertIndex < insertThumbnails.length && insertName != null) {
-		insertName.textContent = insertThumbnails[insertIndex].name;
-		insertThumbnails[insertIndex].draw(insertContext2d);
-	    }
-	}
-	window.pressPreviousMolecule = function() {
-	    insertIndex--;
-	    if (insertIndex < 0) insertIndex = insertThumbnails.length-1;
-	    updateInsertPanel();
-	}
-	window.pressNextMolecule = function() {
-	    insertIndex++;
-	    if (insertIndex >= insertThumbnails.length) insertIndex = 0;
-	    updateInsertPanel();
-	}
-	window.pressInsertMolecule = function() {
-	    if (insertIndex < insertThumbnails.length) {
-		const thumb = insertThumbnails[insertIndex];
-		insertMolecule(thumb.mol, thumb.name);
-	    }
-	}
+    // Thumbnail picker uses the same molecules and renderer as the original preview.
+    let insertIndex = 0;
+    let pickerThumbnails = null;
+    const moleculePicker = document.getElementById('moleculePicker');
+    const moleculeSearch = document.getElementById('moleculeSearch');
+
+    function filterMoleculePicker() {
+        if (!moleculePicker) return;
+        const query = moleculeSearch ? moleculeSearch.value.trim().toLowerCase() : '';
+        const items = Array.from(moleculePicker.querySelectorAll('.molecule-option'));
+        for (const item of items) item.hidden = !item.dataset.search.includes(query);
+        const visible = items.filter(item => !item.hidden);
+        const selected = visible.find(item => Number(item.dataset.index) === insertIndex);
+        for (const item of items) item.tabIndex = item === (selected || visible[0]) ? 0 : -1;
+        const empty = document.getElementById('moleculePickerEmpty');
+        if (empty) {
+            empty.hidden = visible.length > 0;
+            empty.textContent = items.length ? 'No matching molecules.' : 'No molecules available for insertion.';
+        }
+    }
+
+    function buildMoleculePicker() {
+        if (!moleculePicker || pickerThumbnails === insertThumbnails) return;
+        pickerThumbnails = insertThumbnails;
+        moleculePicker.replaceChildren();
+        insertThumbnails.forEach((thumbnail, index) => {
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'molecule-option';
+            option.dataset.index = String(index);
+            option.dataset.search = `${thumbnail.name} ${thumbnail.mol.name}`.toLowerCase();
+            option.setAttribute('aria-label', `Insert ${thumbnail.name}`);
+            option.title = `Insert ${thumbnail.name} (${thumbnail.mol.name})`;
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 112;
+            canvas.setAttribute('aria-hidden', 'true');
+            const label = document.createElement('span');
+            label.textContent = thumbnail.name;
+            option.append(canvas, label);
+            option.addEventListener('click', () => {
+                insertIndex = index;
+                updateInsertPanel();
+                window.pressInsertMolecule();
+            });
+            moleculePicker.append(option);
+            const context = canvas.getContext('2d');
+            if (context) thumbnail.draw(context);
+        });
+    }
+
+    function updateInsertPanel() {
+        insertIndex = Math.max(0, Math.min(insertIndex, insertThumbnails.length - 1));
+        buildMoleculePicker();
+        const thumbnail = insertThumbnails[insertIndex];
+        const name = document.getElementById('insertName');
+        if (name) name.textContent = thumbnail ? thumbnail.name : 'None';
+        if (thumbnail && insertContext2d) thumbnail.draw(insertContext2d);
+        const insertButton = document.getElementById('buttonInsert');
+        if (insertButton) {
+            insertButton.disabled = !thumbnail;
+            insertButton.setAttribute('aria-label', thumbnail ? `Insert ${thumbnail.name}` : 'Insert molecule');
+        }
+        filterMoleculePicker();
+    }
+    if (moleculeSearch) moleculeSearch.addEventListener('input', filterMoleculePicker);
+    if (moleculePicker) moleculePicker.addEventListener('keydown', event => {
+        const directions = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+        if (!directions.includes(event.key) || !event.target.matches('.molecule-option')) return;
+        const visible = Array.from(moleculePicker.querySelectorAll('.molecule-option')).filter(option => !option.hidden);
+        let index = visible.indexOf(event.target);
+        if (index < 0) return;
+        event.preventDefault();
+        if (event.key === 'Home') index = 0;
+        else if (event.key === 'End') index = visible.length - 1;
+        else {
+            const stride = event.key === 'ArrowUp' || event.key === 'ArrowDown' ? 2 : 1;
+            const direction = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+            index = Math.max(0, Math.min(visible.length - 1, index + direction * stride));
+        }
+        // Arrow keys browse; native Enter/Space activates the insertion button.
+        insertIndex = Number(visible[index].dataset.index);
+        updateInsertPanel();
+        visible[index].focus({preventScroll: true});
+        visible[index].scrollIntoView({block: 'nearest'});
+    });
+    // Retain the original handlers for pages that still use Prev/Next.
+    window.pressPreviousMolecule = function() {
+        if (!insertThumbnails.length) return;
+        insertIndex = (insertIndex - 1 + insertThumbnails.length) % insertThumbnails.length;
+        updateInsertPanel();
+    };
+    window.pressNextMolecule = function() {
+        if (!insertThumbnails.length) return;
+        insertIndex = (insertIndex + 1) % insertThumbnails.length;
+        updateInsertPanel();
+    };
+    window.pressInsertMolecule = function() {
+        const thumbnail = insertThumbnails[insertIndex];
+        if (thumbnail) insertMolecule(thumbnail.mol, thumbnail.name);
+    };
 
 	// Write the PDB text
 	window.pressPDB = function() {
@@ -1514,15 +1994,13 @@
 	    updateShowWaterCheck();
 	}
 	function updateShowWaterCheck() {
-	    const checkbox =  document.getElementById('checkShowWater');
-	    if (checkbox != null)
-		checkbox.checked = (hideMaterial != MaterialEnum.water);
+	    setToggleState(document.getElementById('checkShowWater'), hideMaterial != MaterialEnum.water);
 	}
 	updateShowWaterCheck();
 
 	// Minimization button
 	window.pressMinimize = function() {
-	    if (currState == SimState.running ) {
+	    if (automaticSteps && currState == SimState.running ) {
 		// Minimization is a bit slower
 		runSteps = Math.ceil(runSteps/2);
 	    }
@@ -1578,6 +2056,11 @@
 
 	// Run a shader to minimize energy
 	// This gets called in many different places
+    function refreshForces() {
+        runForceShader(env, currTexInfo.pos, textures.forceFB, true);
+        forcesDirty = false;
+    }
+
 	function minimize(steps = 200) {
 	    let stepSize = 0.05;
 	    const minStepSize = 1e-4;
@@ -1593,6 +2076,7 @@
 		// Take smaller steps each time
 		stepSize *= stepScale;
 	    }
+	    refreshForces();
 	    advanceRandomNumbers();
 	    runResetVelocityShader(env, currTexInfo.random, simSys.kT, textures.velFB);
 	}
@@ -1613,6 +2097,7 @@
 
 	// Cycle positions
 	function swapPositionBuffers() {
+            forcesDirty = true;
 	    const tempTex = currTexInfo.pos;
 	    currTexInfo.pos = nextTexInfo.pos;
 	    nextTexInfo.pos = tempTex;
@@ -1650,13 +2135,17 @@
 		    atomTexData.makeHashTable();
 		    
 		    // Reinitialize the shader code with potentially different hash table dimensions and maxCollisions
-		    shaders = new MDShaders(gl, atomTexData, atomMinDist, atomMaxDisplace);
+		    const oldShaders = shaders;
+            shaders = new MDShaders(gl, atomTexData, atomMinDist, atomMaxDisplace);
+            if (oldShaders) oldShaders.dispose(gl);
 		    // We have to remember to update this reference in the "env" variable
 		    env.shaders = shaders;
 		}
 		
 		// Reinitialize the textures and frame buffers
-		textures = new MDTextures(gl, atomTexData, shaders, simSys);
+		const oldTextures = textures;
+            textures = new MDTextures(gl, atomTexData, shaders, simSys);
+            if (oldTextures) oldTextures.dispose(gl);
 		
 		// We have to remember to update this reference in the "env" variable
 		env.textures = textures;
@@ -1696,7 +2185,9 @@
 		atomTexData.deleteMolecule(currPos, mouseInfo.fragment, selectTexColumn);
 		
 		// Reinitialize the textures and frame buffers
-		textures = new MDTextures(gl, atomTexData, shaders, simSys);
+		const oldTextures = textures;
+            textures = new MDTextures(gl, atomTexData, shaders, simSys);
+            if (oldTextures) oldTextures.dispose(gl);
 
 		// We have to remember to update this reference in the "env" variable
 		env.textures = textures;
@@ -1715,8 +2206,44 @@
 	//////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////
 	// Prepare for the simulation loop
-	let runSteps = 20;
-	const analysisFrames = 20;
+        const maxStepsPerFrame = Number.isFinite(SIM_PARAMETERS.maxStepsPerFrame)
+            ? Math.max(1, Math.floor(SIM_PARAMETERS.maxStepsPerFrame))
+            : defaultParameters.maxStepsPerFrame;
+        let runSteps = Math.max(1, Math.min(maxStepsPerFrame,
+            Number.isFinite(SIM_PARAMETERS.stepsPerFrame)
+                ? Math.round(SIM_PARAMETERS.stepsPerFrame)
+                : defaultParameters.stepsPerFrame));
+        let automaticSteps = SIM_PARAMETERS.stepsPerFrameAuto === true;
+        const autoStepsControl = document.getElementById('autoSteps');
+        const stepsSlider = document.getElementById('stepsPerFrame');
+        const stepsOutput = document.getElementById('stepsValue');
+        const stepsMaximum = document.getElementById('stepsMaximum');
+        function updateStepsControls() {
+            setToggleState(autoStepsControl, automaticSteps);
+            if (stepsMaximum) stepsMaximum.textContent = String(maxStepsPerFrame);
+            if (stepsSlider) {
+                stepsSlider.max = String(maxStepsPerFrame);
+                stepsSlider.disabled = automaticSteps;
+                stepsSlider.value = String(runSteps);
+            }
+            if (stepsOutput) stepsOutput.textContent = automaticSteps ? `Auto · ${runSteps}` : String(runSteps);
+        }
+        if (autoStepsControl && stepsSlider) {
+            autoStepsControl.addEventListener(autoStepsControl.type === 'checkbox' ? 'change' : 'click', () => {
+                automaticSteps = autoStepsControl.type === 'checkbox' ? autoStepsControl.checked : !automaticSteps;
+                updateStepsControls();
+            });
+            stepsSlider.addEventListener('input', () => {
+                if (automaticSteps) return;
+                const value = Number(stepsSlider.value);
+                if (Number.isFinite(value)) runSteps = Math.max(1, Math.min(maxStepsPerFrame, Math.round(value)));
+                updateStepsControls();
+            });
+        }
+        updateStepsControls();
+        const analysisFrames = Number.isFinite(SIM_PARAMETERS.analysisFrames)
+            ? Math.max(1, Math.round(SIM_PARAMETERS.analysisFrames))
+            : defaultParameters.analysisFrames;
 	let selectStatusTime = performance.now();
 	let sumSimTime = 0.0;
 
@@ -1729,6 +2256,7 @@
 	let insertContext2d = null;
 	if (insertCanvas != null) insertContext2d = insertCanvas.getContext('2d');
 
+	insertionPanelReady = true;
 	updateInsertPanel();
 
 	///////////////////////////////////////////////////////////////////////////////
@@ -1736,11 +2264,13 @@
 	function run() {
 	    // Run multiple steps before rendering
 	    const frameStartTime = performance.now();
+            let framePositions = null;
 	    if (currState == SimState.minimizing) {
 		// Run minimization
 		minimize(runSteps);
 		step+=runSteps;
 	    } else if (currState == SimState.running) {
+                if (forcesDirty) refreshForces();
 		// Velocity Verlet for Langevin dynamics from
 		// Izaguirre et al. (2001) Langevin stabilization of molecular dynamics. J. Chem. Phys. 114(5), 2090–2098. DOI: 10.1063/1.1332996
 		for (let i = 0; i < runSteps; i++) {
@@ -1815,7 +2345,7 @@
 		    statusText += `Time per simulation step: ${stepTime.toFixed(5)} ms`;
 		    statusText += `<br>Total performance: ${totalPerfPs.toFixed(2)} ps/min`;
 		    statusText += `<br>Total performance: ${totalPerf.toFixed(2)} ns/day`;
-		    statusText += `<br>Simulation performance: ${runPerf.toFixed(2)} ns/day`;
+		    //statusText += `<br>Simulation performance: ${runPerf.toFixed(2)} ns/day`;
 		}
 		statusText += `<br>Framerate: ${framesPerSecond.toFixed(2)} 1/s`;
 		statusText += `<br>Steps per frame: ${runSteps}`;
@@ -1824,7 +2354,7 @@
 
 		// Get the kinetic and potential energies from the textures
 		// This comes after the swap, so we use currTexInfo
-		const currPos = extractData(env, currTexInfo.pos, textures.width, textures.height);
+		const currPos = framePositions = extractData(env, currTexInfo.pos, textures.width, textures.height);
 		const currVel = extractData(env, textures.vel, textures.width, textures.height);
 		const currForce = extractData(env, textures.force, textures.width, textures.height);
 		const currNonbond = extractData(env, textures.nonbond, textures.width, textures.height);
@@ -1841,27 +2371,24 @@
 		    document.getElementById("tabTemperature").innerHTML = `${temperKin.toFixed(prec)}`;
 		}
 		
-		// Adjust runSteps to improve performance
-		if (currState != SimState.none) {
+		// Adjust runSteps to improve performance only in Auto mode.
+		if (automaticSteps && currState != SimState.none) {
 		    if (framesPerSecond < 10.0) {
 			runSteps = Math.ceil(runSteps*framesPerSecond/10.0);
 		    } else if (framesPerSecond > 25.0) {
 			runSteps = Math.ceil(runSteps*framesPerSecond/25.0);
 		    }
-		    // Put some kind of sane limits on runSteps
-		    if (runSteps < 5) {
-			runSteps = 5;
-		    } else if (runSteps > 500) {
-			runSteps = 500;
-		    }
+            // The configured ceiling also takes precedence over Auto's minimum.
+            runSteps = Math.min(maxStepsPerFrame, Math.max(5, runSteps));
 		}
 	    }
+	    updateStepsControls();
+
+	    if (centerOnMassEnabled) recenterView(framePositions);
 
 	    // Draw the system
 	    // Is the mouse in the 3d canvas?
-	    // Update the world position of the mouse (at the selected atom's z value)
-	    if (mouseInfo.x > 0 && mouseInfo.y > 0) {
-		mouseInfo.toWorld(gl, renderInfo.viewProjectionMatrix);
+	    if (interactionMode === 'move' && !orbitPointer && mouseInfo.x > 0 && mouseInfo.y > 0) {
 		if (!mouseInfo.down) {
 		    mousePoint();
 		}
@@ -1870,7 +2397,9 @@
 	    // Set the selection status
 	    const selectStatus = document.getElementById('selectStatus');
 	    if (selectStatus != null) {
-		if (mouseInfo.dragging) {
+		if (interactionMode === 'view') {
+                selectStatus.textContent = 'Left-drag: rotate. Scroll/right-drag: zoom. M: move mode.';
+            } else if (mouseInfo.dragging) {
 		    selectStatusTime = performance.now();
 		    selectStatus.innerHTML = `<span class="selectDrag">Dragging ${mouseInfo.moleculeName}</span><br>&nbsp;`;
 		} else if (mouseInfo.fragment >= 0 && mouseInfo.material != MaterialEnum.background) {
@@ -1888,16 +2417,12 @@
 		}
 	    }
 	    
-	    // Set mouse status info
-	    //const mouseStatus1 = document.getElementById("mouseStatus1");
-	    //mouseStatus1.innerHTML = `<br>Mouse: ${mouseInfo.x} ${mouseInfo.y}<br>Atom: ${mouseInfo.atom}<br>Atom pos.: ${mouseInfo.atomX.toFixed(2)} ${mouseInfo.atomY.toFixed(2)} ${mouseInfo.atomZ.toFixed(2)}<br>World: ${mouseInfo.worldX.toFixed(2)} ${mouseInfo.worldY.toFixed(2)} ${mouseInfo.worldZ.toFixed(2)}<br>Fragment: ${mouseInfo.fragment}<br>Residue: ${mouseInfo.resName}<br>Monomer: ${mouseInfo.monomer}<br>Material: ${mouseInfo.material}<br>Type: ${mouseInfo.type}<br>Mouse scale: ${mouseInfo.scale.toFixed(2)}`;
-	    
 	    // Make the selection pulse with time (using frame makes it stutter)
 	    const selectScale = 0.85 + 0.6*Math.cos(2.0*Math.PI*(performance.now()-cycleStartTime)/800.0);
 	    // Highlight the whole fragment
-	    //const selectInfo = {id: mouseInfo.fragment, mask: [1, 0, 0, 0], atom: mouseInfo.atom, scale: selectScale, hideMaterial: hideMaterial};
+	    //const selectInfo = {id: mouseInfo.fragment, mask: [1, 0, 0, 0], atom: mouseInfo.atom, scale: selectScale, hideMaterial: hideMaterial, aoStrength};
 	    // Highlight just the monomer
-	    const selectInfo = {id: mouseInfo.monomer, mask: [0, 1, 0, 0], atom: mouseInfo.atom, scale: selectScale, hideMaterial: hideMaterial};
+	    const selectInfo = {id: mouseInfo.monomer, mask: [0, 1, 0, 0], atom: mouseInfo.atom, scale: selectScale, hideMaterial: hideMaterial, aoStrength};
 	    // Draw the scene
 	    // We have already cycled from nextTexInfo to currTexInfo, so use currTexInfo	    
 	    drawAtoms(env, shaders.drawSpheres, shaders.drawSpheresLocs, currTexInfo.pos, selectInfo, renderInfo, null);
@@ -1914,6 +2439,7 @@
 	let lastTime = cycleStartTime;
 	let lastStep = 0;
 	let stopSimulation = false;
+	setInteractionMode('move');
 	requestAnimationFrame(run);
     }
     

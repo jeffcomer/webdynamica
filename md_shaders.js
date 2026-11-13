@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////
-// Copyright (C) 2024 Jeffrey Robert Comer
+// Copyright (C) 2024-2026 Jeffrey Robert Comer
 //
 // This file is part of WebDynamica, a browser-based interactive
 // molecular dynamics program using WebGL
@@ -29,10 +29,50 @@
 // Phillips et al. (2005) Scalable Molecular Dynamics with NAMD. J. Comput. Chem. 26(16), 1781–1802. DOI: 10.1002/jcc.20289
 // Brooks et al. (1984) Stochastic boundary conditions for molecular dynamics simulations of ST2 water. Chem. Phys. Lett. 105(5), 495–500. DOI: 10.1016/0009-2614(84)80098-6
 // I'm purposely not indenting here to make editing the shaders easier
+// Build a closed unit icosphere. Radial vertex normals give smooth shading.
+function createAtomIcosphere(subdivisions = 2) {
+    const t = (1 + Math.sqrt(5)) / 2;
+    const unit = v => { const length = Math.hypot(...v); return v.map(x => x / length); };
+    const vertices = [
+        [-1,t,0], [1,t,0], [-1,-t,0], [1,-t,0],
+        [0,-1,t], [0,1,t], [0,-1,-t], [0,1,-t],
+        [t,0,-1], [t,0,1], [-t,0,-1], [-t,0,1]
+    ].map(unit);
+    let faces = [
+        [0,11,5], [0,5,1], [0,1,7], [0,7,10], [0,10,11],
+        [1,5,9], [5,11,4], [11,10,2], [10,7,6], [7,1,8],
+        [3,9,4], [3,4,2], [3,2,6], [3,6,8], [3,8,9],
+        [4,9,5], [2,4,11], [6,2,10], [8,6,7], [9,8,1]
+    ].map(face => face.map(index => vertices[index]));
+    const midpoint = (a, b) => unit(a.map((x, i) => x + b[i]));
+    for (let level = 0; level < subdivisions; level++) {
+        faces = faces.flatMap(([a, b, c]) => {
+            const ab = midpoint(a, b), bc = midpoint(b, c), ca = midpoint(c, a);
+            return [[a,ab,ca], [b,bc,ab], [c,ca,bc], [ab,bc,ca]];
+        });
+    }
+    return new Float32Array(faces.flat(2));
+}
+
 class MDShaders {
+    dispose(gl) {
+        // Programs own the shader objects compiled for them by webglUtils.
+        gl.useProgram(null);
+        const attached = new Set();
+        for (const name of ['occlusion', 'drawSpheres', 'drawPositions', 'drift', 'verletKick', 'firstKick', 'secondKick', 'force', 'forceFast', 'downhill', 'copy', 'displace', 'displaceRelative', 'initVel', 'random', 'extract']) {
+            const program = this[name];
+            if (!program) continue;
+            for (const shader of gl.getAttachedShaders(program) || []) attached.add(shader);
+            gl.deleteProgram(program);
+            this[name] = null;
+        }
+        for (const shader of attached) gl.deleteShader(shader);
+    }
+
     constructor(gl, atomTexData, atomMinDist, atomMaxDisplace) {
-this.SPHERE_VERTICES = 39; // Our simple half-sphere model
-this.ATOM_MIN_DIST = atomMinDist.toFixed(1);
+this.spherePositions = createAtomIcosphere();
+this.SPHERE_VERTICES = this.spherePositions.length / 3;
+this.ATOM_MIN_DIST = atomMinDist.toExponential(8);
 // Typically, the maximum displacement should be a few times bigger than
 // units 'sqrt(k*370*K/(hydrogen*u))' 'Å/fs' = 0.01747031
 this.ATOM_MAX_DISPLACE = atomMaxDisplace.toFixed(1);
@@ -77,16 +117,18 @@ this.RAND_M3 = 8191;
 this.RAND_A3 = 1716;
 
 
-// Render the atoms using a half-sphere model with 13 triangles
+// Render complete 320-triangle icospheres from a shared vertex buffer.
 this.drawSpheresVS = `
 #define SPHERE_VERTICES ${this.SPHERE_VERTICES}
 #define ATOM_TEX_WIDTH ${this.ATOM_TEX_WIDTH}
 #define ATOM_TEX_HEIGHT ${this.ATOM_TEX_HEIGHT}
 
 attribute float id;
+attribute vec3 spherePosition;
 // Atom position texture
 uniform sampler2D posTex;
 uniform sampler2D colorTex;
+uniform sampler2D occlusionTex;
 uniform sampler2D selectTex;
 uniform float selectId;
 uniform vec4 selectMask;
@@ -100,6 +142,8 @@ uniform vec3 lightPos;
 varying vec3 v_surfaceToView;
 varying vec3 v_surfaceToLight;
 varying vec3 v_normal;
+varying vec3 v_occlusionPositive;
+varying vec3 v_occlusionNegative;
 varying vec3 v_color;
 varying float v_background;
 varying float v_atomIndex;
@@ -112,58 +156,14 @@ vec2 atomTextureCoords(float atomIndex) {
 
 
 void main() {
-  float vertices = float(SPHERE_VERTICES);
-
-  vec3 d[SPHERE_VERTICES];
-  d[0]  = vec3(0.000, -0.500, 0.866);
-  d[1]  = vec3(0.433, 0.250, 0.866);
-  d[2]  = vec3(-0.433, 0.250, 0.866);
-  d[3]  = vec3(-0.000, 1.000, 0.000);
-  d[4]  = vec3(-0.433, 0.250, 0.866);
-  d[5]  = vec3(0.433, 0.250, 0.866);
-  d[6]  = vec3(-0.000, 1.000, 0.000);
-  d[7]  = vec3(0.433, 0.250, 0.866);
-  d[8]  = vec3(0.643, 0.766, 0.000);
-  d[9]  = vec3(0.985, 0.174, 0.000);
-  d[10] = vec3(0.643, 0.766, 0.000);
-  d[11] = vec3(0.433, 0.250, 0.866);
-  d[12] = vec3(0.866, -0.500, 0.000);
-  d[13] = vec3(0.985, 0.174, 0.000);
-  d[14] = vec3(0.433, 0.250, 0.866);
-  d[15] = vec3(0.866, -0.500, 0.000);
-  d[16] = vec3(0.433, 0.250, 0.866);
-  d[17] = vec3(0.000, -0.500, 0.866);
-  d[18] = vec3(0.342, -0.940, 0.000);
-  d[19] = vec3(0.866, -0.500, 0.000);
-  d[20] = vec3(0.000, -0.500, 0.866);
-  d[21] = vec3(-0.342, -0.940, 0.000);
-  d[22] = vec3(0.342, -0.940, 0.000);
-  d[23] = vec3(0.000, -0.500, 0.866);
-  d[24] = vec3(-0.866, -0.500, 0.000);
-  d[25] = vec3(-0.342, -0.940, 0.000);
-  d[26] = vec3(0.000, -0.500, 0.866);
-  d[27] = vec3(-0.866, -0.500, 0.000);
-  d[28] = vec3(0.000, -0.500, 0.866);
-  d[29] = vec3(-0.433, 0.250, 0.866);
-  d[30] = vec3(-0.985, 0.174, 0.000);
-  d[31] = vec3(-0.866, -0.500, 0.000);
-  d[32] = vec3(-0.433, 0.250, 0.866);
-  d[33] = vec3(-0.643, 0.766, 0.000);
-  d[34] = vec3(-0.985, 0.174, 0.000);
-  d[35] = vec3(-0.433, 0.250, 0.866);
-  d[36] = vec3(-0.000, 1.000, 0.000);
-  d[37] = vec3(-0.643, 0.766, 0.000);
-  d[38] = vec3(-0.433, 0.250, 0.866);
-
-  // Which vertex are we on?
-  float sel = mod(id,vertices);
-  vec3 z = vec3(0);
-  vec3 vert = ((sel==0.0)?d[0]:z) + ((sel==1.0)?d[1]:z) + ((sel==2.0)?d[2]:z) + ((sel==3.0)?d[3]:z) + ((sel==4.0)?d[4]:z) + ((sel==5.0)?d[5]:z) + ((sel==6.0)?d[6]:z) + ((sel==7.0)?d[7]:z) + ((sel==8.0)?d[8]:z) + ((sel==9.0)?d[9]:z) + ((sel==10.0)?d[10]:z) + ((sel==11.0)?d[11]:z) + ((sel==12.0)?d[12]:z) + ((sel==13.0)?d[13]:z) + ((sel==14.0)?d[14]:z) + ((sel==15.0)?d[15]:z) + ((sel==16.0)?d[16]:z) + ((sel==17.0)?d[17]:z) + ((sel==18.0)?d[18]:z) + ((sel==19.0)?d[19]:z) + ((sel==20.0)?d[20]:z) + ((sel==21.0)?d[21]:z) + ((sel==22.0)?d[22]:z) + ((sel==23.0)?d[23]:z) + ((sel==24.0)?d[24]:z) + ((sel==25.0)?d[25]:z) + ((sel==26.0)?d[26]:z) + ((sel==27.0)?d[27]:z) + ((sel==28.0)?d[28]:z) + ((sel==29.0)?d[29]:z) + ((sel==30.0)?d[30]:z) + ((sel==31.0)?d[31]:z) + ((sel==32.0)?d[32]:z) + ((sel==33.0)?d[33]:z) + ((sel==34.0)?d[34]:z) + ((sel==35.0)?d[35]:z) + ((sel==36.0)?d[36]:z) + ((sel==37.0)?d[37]:z) + ((sel==38.0)?d[38]:z);
+  vec3 vert = spherePosition;
 
   // Get the position from the texture
-  v_atomIndex = floor(id/vertices);
+  v_atomIndex = id;
   vec2 texCoord = atomTextureCoords(v_atomIndex);
   vec4 position = texture2D(posTex, texCoord);
+  v_occlusionPositive = texture2D(occlusionTex, vec2(0.5 * texCoord.x, texCoord.y)).xyz;
+  v_occlusionNegative = texture2D(occlusionTex, vec2(0.5 + 0.5 * texCoord.x, texCoord.y)).xyz;
 
   // Is this atom selected?
   vec4 select = texture2D(selectTex, texCoord);
@@ -209,8 +209,11 @@ this.drawSpheresFS = `
      uniform vec3 cameraPos;
      uniform float shininess;
      uniform float ambient;
+     uniform float aoStrength;
      uniform float fadeDistance;
      varying vec3 v_normal;
+     varying vec3 v_occlusionPositive;
+     varying vec3 v_occlusionNegative;
      varying vec3 v_color;
      varying vec3 v_surfaceToView;
      varying vec3 v_surfaceToLight;
@@ -219,6 +222,11 @@ this.drawSpheresFS = `
      void main() {
        // Normalize the interpolated varying normal
        vec3 normal = normalize(v_normal);
+       vec3 positive = max(normal, vec3(0.0));
+       vec3 negative = max(-normal, vec3(0.0));
+       float blocked = dot(positive * positive, v_occlusionPositive)
+                     + dot(negative * negative, v_occlusionNegative);
+       float visibility = max(0.18, exp(-aoStrength * blocked));
 
        //float fadeFactor = fadeDistance*fadeDistance/dot(v_surfaceToLight,v_surfaceToLight);
        float fadeFactor = fadeDistance/length(v_surfaceToLight);
@@ -227,19 +235,24 @@ this.drawSpheresFS = `
        vec3 halfVector = normalize(surfaceToLightDirection + surfaceToViewDirection);
 
        float lightComp = dot(normal, surfaceToLightDirection);
-       float lightDiffuse = lightComp*(1.0 - 0.5*v_background);
+       // Ordinary atoms use softer direct light and more occludable ambient light.
+       // Background atoms use a flatter, less glossy lighting balance.
+       float directWeight = mix(0.65, 0.35, v_background);
+       float ambientWeight = mix(2.5, 4.5, v_background);
+       float specularWeight = mix(0.65, 0.2, v_background);
+       float lightDiffuse = max(lightComp, 0.0) * directWeight;
 
        float specular = 0.0;
        float specComp = dot(normal, halfVector);
-       if (specComp > 0.0) {
+       if (lightComp > 0.0 && specComp > 0.0) {
 	   specular = pow(specComp, shininess);
        }
 
        // Set the color
        gl_FragColor = vec4(v_color, 1);
        // Multiply just the color portion (not the alpha) by the light
-       gl_FragColor.rgb *= fadeFactor*(lightDiffuse + ambient*(1.0 + 3.0*v_background));
-       gl_FragColor.rgb += fadeFactor*specular*(1.0 - 0.5*v_background);
+       gl_FragColor.rgb *= fadeFactor*(lightDiffuse + visibility * ambient * ambientWeight);
+       gl_FragColor.rgb += fadeFactor * specular * specularWeight;
      }
 `;
 
@@ -290,6 +303,57 @@ this.dummyVS = `
   }
 `;
 
+
+// Six directional samples at each atom's surface, stored in two texture halves.
+// Surface offsets and hemisphere weighting keep open planar faces unoccluded.
+this.occlusionFS = `
+precision highp float;
+uniform sampler2D posTex;
+uniform sampler2D colorTex;
+uniform sampler2D selectTex;
+uniform float hideMaterial;
+#define WIDTH ${this.ATOM_TEX_WIDTH}
+#define HEIGHT ${this.ATOM_TEX_HEIGHT}
+float sphereOcclusion(vec3 surfaceDelta, vec3 normal, float radius) {
+    float distance = max(length(surfaceDelta), 0.0001);
+    // Approximate the cosine-weighted solid angle in the outward hemisphere.
+    float facing = max(dot(normal, surfaceDelta) / distance, 0.0);
+    float angularRadius = min(radius / distance, 1.0);
+    return facing * angularRadius * angularRadius;
+}
+void main() {
+    float side = gl_FragCoord.x < WIDTH ? 1.0 : -1.0;
+    vec2 uv = vec2(mod(gl_FragCoord.x, WIDTH), gl_FragCoord.y) / vec2(WIDTH, HEIGHT);
+    vec4 atom = texture2D(posTex, uv);
+    float radius = 0.6 * texture2D(colorTex, uv).w;
+    vec4 occlusion = vec4(0.0);
+    if (atom.w > 0.0 && texture2D(selectTex, uv).z != hideMaterial) {
+        for (int y = 0; y < ${atomTexData.height}; y++) {
+            for (int x = 0; x < ${atomTexData.width}; x++) {
+                vec2 otherUV = (vec2(float(x), float(y)) + 0.5) / vec2(WIDTH, HEIGHT);
+                if (distance(otherUV, uv) < 0.1 / max(WIDTH, HEIGHT)) continue;
+                vec4 other = texture2D(posTex, otherUV);
+                if (other.w <= 0.0 || texture2D(selectTex, otherUV).z == hideMaterial) continue;
+                vec3 delta = other.xyz - atom.xyz;
+                float d = length(delta);
+                float r = 0.6 * texture2D(colorTex, otherUV).w;
+                if (r <= 0.0 || d <= 0.0001) continue;
+                // Local contact occlusion fades smoothly beyond four combined radii.
+                float reach = max(radius + r, 0.0001);
+                float falloff = 1.0 - smoothstep(2.0 * reach, 4.0 * reach, d);
+                vec3 nx = vec3(side, 0.0, 0.0);
+                vec3 ny = vec3(0.0, side, 0.0);
+                vec3 nz = vec3(0.0, 0.0, side);
+                occlusion.xyz += falloff * vec3(
+                    sphereOcclusion(delta - radius * nx, nx, r),
+                    sphereOcclusion(delta - radius * ny, ny, r),
+                    sphereOcclusion(delta - radius * nz, nz, r));
+            }
+        }
+    }
+    gl_FragColor = occlusion;
+}
+`;
 
 // Cycle the linear congruential generators
 this.randomFS = `
@@ -1933,19 +1997,28 @@ this.preparePrograms(gl);
 
     // Begin normal identation
     preparePrograms(gl) {
-	/////////////////////////////////////////////////////////
-	// Create the shader programs
-	/////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////
+    // Create the shader programs
+    /////////////////////////////////////////////////////////
 
-	/////////////////////////////////////////////////////////
-	// Drawing programs
-	/////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////
+    // Drawing programs
+    /////////////////////////////////////////////////////////
+
+    this.occlusion = webglUtils.createProgramFromSources(gl, [this.dummyVS, this.occlusionFS]);
+    this.occlusionLocs = {dummy: gl.getAttribLocation(this.occlusion, 'dummy')};
+    for (const name of ['posTex', 'colorTex', 'selectTex', 'hideMaterial']) {
+        this.occlusionLocs[name] = gl.getUniformLocation(this.occlusion, name);
+    }
 
 	// Draw the atoms as spheres with shading
 	this.drawSpheres = webglUtils.createProgramFromSources(
 	    gl, [this.drawSpheresVS, this.drawSpheresFS]);
 	this.drawSpheresLocs = {
 	    id: gl.getAttribLocation(this.drawSpheres, 'id'),
+            occlusionTex: gl.getUniformLocation(this.drawSpheres, 'occlusionTex'),
+            aoStrength: gl.getUniformLocation(this.drawSpheres, 'aoStrength'),
+            spherePosition: gl.getAttribLocation(this.drawSpheres, 'spherePosition'),
 	    posTex: gl.getUniformLocation(this.drawSpheres, 'posTex'),
 	    colorTex: gl.getUniformLocation(this.drawSpheres, 'colorTex'),
 	    selectTex: gl.getUniformLocation(this.drawSpheres, 'selectTex'),
@@ -1967,6 +2040,7 @@ this.preparePrograms(gl);
 	    gl, [this.drawSpheresVS, this.drawPositionsFS]);
 	this.drawPositionsLocs = {
 	    id: gl.getAttribLocation(this.drawPositions, 'id'),
+        spherePosition: gl.getAttribLocation(this.drawPositions, 'spherePosition'),
 	    posTex: gl.getUniformLocation(this.drawPositions, 'posTex'),
 	    colorTex: gl.getUniformLocation(this.drawPositions, 'colorTex'),
 	    selectTex: gl.getUniformLocation(this.drawPositions, 'selectTex'),

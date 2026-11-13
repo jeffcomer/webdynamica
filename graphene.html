@@ -29,18 +29,20 @@
     <div id="main" class="container">
       
       <div class="render">
-	<!-- <p id="header"><span id="systemName" class="white-back">Molecules on Graphene</span></p> -->
+	<!-- <p id="header"><span id="systemName" class="white-back">Hydration Shells</span></p> -->
 	<canvas id="canvas3d"></canvas>
       </div>
       
       <div class="control">
 
+	
+
         <div id="statusBox0" class="element">
 	  <fieldset><legend id="WebDynamicaVersion">WebDynamica</legend>
-	    <p>
-	      <button id="buttonPlay" onclick="window.togglePlay()">▶</button>
-	      <button id="buttonMinimize" onclick="window.pressMinimize()">Minimize energy</button>
-	    </p>
+	    <div class="simulation-actions">
+	      <button id="buttonPlay" type="button" onclick="window.togglePlay()">▶</button>
+	      <button id="buttonMinimize" type="button" onclick="window.pressMinimize()">Minimize energy</button>
+	    </div>
 	    <div>
 	      <table>
 		<!-- <tr><th>State:</th><td id="tabState" class="center"></td></tr> -->
@@ -49,21 +51,48 @@
 		<tr><th>Kinetic Temp. (K):</th><td id="tabTemperature"></td></tr>
 	      </table>
 	    </div>
-	    <p>
+	    <div class="simulation-options">
+              <div class="thermostat-controls">
+                <button id="checkThermostat" class="toggle-button" type="button" aria-label="Thermostat" aria-pressed="false" onclick="toggleThermostat()">Thermostat <span class="toggle-state" aria-hidden="true">Off</span></button>
+                <label for="inputThermostat">Temp. (K) <input type="text" id="inputThermostat" size="3" name="inputThermostat"></label>
+              </div>
+              <button id="checkShowWater" class="toggle-button" type="button" aria-label="Show water" aria-pressed="true" onclick="toggleShowWater()">Show water <span class="toggle-state" aria-hidden="true">On</span></button>
+            </div>
+	  
+            <div class="steps-control">
+              <div class="steps-heading">
+                <label for="stepsPerFrame">Steps per frame</label>
+                <button id="autoSteps" class="toggle-button" type="button" aria-label="Auto" aria-pressed="true">Auto <span class="toggle-state" aria-hidden="true">On</span></button>
+              </div>
+              <input id="stepsPerFrame" type="range" min="1" max="500" step="1" value="20" disabled aria-describedby="stepsHelp">
+              <div class="steps-readout"><span>1</span><output id="stepsValue" for="stepsPerFrame autoSteps">Auto · 20</output><span id="stepsMaximum">500</span></div>
+              <p id="stepsHelp">Auto adjusts to performance.</p>
+            </div>
+          </fieldset>
+	</div>
 
-	      <label for="checkThermostat">Thermostat</label>
-	      <input type="checkbox" id="checkThermostat" name="checkThermostat" onclick="toggleThermostat()" />
-	      <label for="inputThermostat">Temp.(K)</label>
-	      <input type="text" id="inputThermostat" size="3" name="inputThermostat" />
-	      <label for="checkShowWater">Show water</label>
-	      <input type="checkbox" id="checkShowWater" name="checkShowWater" onclick="toggleShowWater()" />
-	    </p>
-	  </fieldset>
+	<div class="element interaction-panel">
+          <fieldset><legend>Mouse mode</legend>
+            <div class="mode-buttons" role="group" aria-label="Mouse mode">
+              <button class="mode-button" type="button" data-interaction-mode="view" aria-keyshortcuts="v" aria-pressed="true" aria-describedby="interactionHelp" title="Rotate view (V). Left-drag rotates; right-drag or scroll zooms; middle-click switches modes.">
+		<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 8a8.5 8.5 0 0 0-14-3L3 8m0-5v5h5M4 16a8.5 8.5 0 0 0 14 3l3-3m0 5v-5h-5"/><circle cx="12" cy="12" r="2.5"/></svg><span>Rotate view</span>
+              </button>
+              <button class="mode-button" type="button" data-interaction-mode="move" aria-keyshortcuts="m" aria-pressed="false" aria-describedby="interactionHelp" title="Move molecules (M). Middle-click switches modes; scroll zooms.">
+		<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4M17 8l4 4-4 4"/></svg><span>Move molecule</span>
+              </button>
+            </div>
+            <p id="interactionHelp" aria-live="polite">Left-drag: rotate. Right-drag or scroll: zoom. M or middle-click: move mode.</p>
+            <div class="view-actions">
+              <button id="centerOnMass" class="toggle-button" type="button" aria-pressed="false" aria-label="Center" title="Continuously follow the center of mass of active non-background atoms">Center<span class="toggle-state" aria-hidden="true">Off</span></button>
+              <button id="resetView" type="button">Reset view</button>
+            </div>
+            <div id="viewCenterStatus" class="view-center-status" role="status"></div>
+          </fieldset>
 	</div>
 
 	<div id="statusBox1" class="element center">
 	  <fieldset><legend>Selection</legend>
-	    <div id="selectStatus">To move molecule, drag with mouse. Press "F" or "B" to move toward/away. Press "Del" or drag off the viewport to delete.</div>
+	    <div id="selectStatus">To move molecule, drag with mouse or use WASD. Press "F" or "B" to move toward/away. Press "Del" or drag off the viewport to delete.</div>
 	    <!-- <div id="selectStatus">To move, drag with mouse. Press "F" or "B" to move toward/away.</div> -->
 	    <canvas id="selectCanvas" class="canvas2d" width="80px" height="80px"></canvas>
 	    <div><span id="moleculeName">None</span></div>
@@ -73,17 +102,19 @@
 
 	<div id="statusBox2" class="element center">
 	  <fieldset><legend>Insertion</legend>
-	    <canvas id="insertCanvas" class="canvas2d" width="80px" height="80px" onclick="window.pressInsertMolecule()"></canvas><br>
-	    To insert: <span id="insertName">None</span>
-	    <p>
-	      <button id="buttonPrevious" onclick="window.pressPreviousMolecule()">Prev</button>
-	      <button id="buttonNext" onclick="window.pressNextMolecule()">Next</button>
-	    </p>
-	    <p>
-	      <button id="buttonInsert" class="buttonBig" onclick="window.pressInsertMolecule()">Insert</button>
-	    </p>
-	  </fieldset>
+            <label class="picker-search-label" for="moleculeSearch">Find a molecule</label>
+            <input id="moleculeSearch" type="search" placeholder="Search molecules…" autocomplete="off" aria-controls="moleculePicker">
+            <p class="picker-hint">Click a molecule to insert it.</p>
+            <div id="moleculePicker" class="molecule-picker" role="group" aria-label="Available molecules"></div>
+            <p id="moleculePickerEmpty" class="picker-empty" role="status" hidden>No matching molecules.</p>
+          </fieldset>
 	</div>
+
+        <div class="element status-panel">
+          <fieldset><legend>Status</legend>
+            <p id="status" class="status"></p>
+          </fieldset>
+        </div>
 
       </div>
     </div>
@@ -91,35 +122,38 @@
 
 
     <div class="container">
-      <p id="status" class="status"></p>
+      
       <p>
-	<button id="buttonPDB" onclick="window.pressPDB()">Make PDB</button>
+	<button id="buttonPDB" type="button" onclick="window.pressPDB()">Make PDB</button>
       </p>
       <!-- <p id="mouseStatus1" class="status"></p> -->
       <!-- <p id="mouseStatus" class="status"></p> -->
 
       <pre id="pdbData" class="status"></pre>
     </div>
-
+    
     <!-- Load the molecules to be displayed or added -->
     <script>const MOLECULE = {};</script>
-    <script src="molecules.js"></script>
-    
+    <script src="some_molecules.js"></script>
+
     <!-- BASE MOLECULES -->
     <script src="graph30_neg-pos.webdyn.js"></script>
+    <!--<script src="graph50.webdyn.js"></script>-->
 
-    <!-- Set the simulation parameters -->
-    <script>
-      const SIM_PARAMETERS = {
-	baseMoleculeName: "graph30_neg-pos",
-	timestep: 1.0, // in femtoseconds
-	temperature: 310, // in kelvin
-	langevinDamping: 0.5, // in ps^-1
-	fieldOfView: 25.0, // in degrees
-	additionalCapacity: 300,
-      };
+    <!-- SIM_PARAMETERS must be set -->
+    <script>const SIM_PARAMETERS = {
+    stepsPerFrameAuto: true, // Set false for manual steps per frame
+    centerOnMass: false, // Set true to follow non-background atoms every frame
+    baseMoleculeName: "graph30_neg-pos",
+    //baseMoleculeName: "graph50",
+    timestep: 1.0, // in femtoseconds
+    temperature: 310, // in kelvin
+    langevinDamping: 0.5, // in ps^-1
+    fieldOfView: 25.0, // in degrees
+    additionalCapacity: 800,
+    insertNames: ['SPCF', 'O2', 'N2', 'argon', 'carbon_dioxide', 'methane', 'propane', 'octane', 'glucose', 'sucrose', 'triolein', 'acetic_acid', 'acetate', 'citric_acid', 'citrate', 'sodium_ion', 'chloride_ion', 'potassium_ion', 'aspirin', 'acetaminophen', 'ibuprofen', 'ascorbate', 'vitamin_D3', 'AAQAA3', 'cholesterol', 'benzene', 'naphthalene', 'benzoate', 'benzamidine'],
+};
     </script>
-    
     
     <script src="webgl-utils.js"></script>
     <script src="m4.js"></script>

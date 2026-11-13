@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////
-// Copyright (C) 2026 Jeffrey Robert Comer
+// Copyright (C) 2024-2026 Jeffrey Robert Comer
 //
 // This file is part of WebDynamica, a browser-based interactive
 // molecular dynamics program using WebGL

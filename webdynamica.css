@@ -1,3 +1,23 @@
+/*
+ * Copyright (C) 2024-2026 Jeffrey Robert Comer
+ *
+ * This file is part of WebDynamica, a browser-based interactive
+ * molecular dynamics program using WebGL
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of  MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 .container {
     display: block;
     clear: both;
@@ -31,7 +51,6 @@
     border: 1px solid black;
     box-sizing: border-box;
     float: left;
-    aspect-ratio: 1 / 1;
     position: relative;
     z-index: 1;
 }
@@ -79,6 +98,7 @@
 }
 
 #canvas3d {
+    display: block;
     cursor: crosshair;
     user-select: none;
     -webkit-user-select: none;
@@ -86,6 +106,8 @@
     -ms-user-select: none;
     width: 100%;
     height: 100%;
+    background-color: #2f2f2f; /* Dark gray hex code */
+    color: #ffffff;           /* Optional: Makes text white so it is readable */
 }
 
 #moleculeName {
@@ -107,10 +129,24 @@
 }
 
 button {
-    font-size: 12px;
-    background-color: #707080;
-    font-weight: bold;
-    color: #ffffc0;
+    box-sizing: border-box;
+    min-height: 34px;
+    padding: 6px 10px;
+    border: 1px solid #59616a;
+    border-radius: 7px;
+    background: #20252b;
+    color: #c2ccd4;
+    font: 600 12px/1.3 system-ui, sans-serif;
+    cursor: pointer;
+}
+button:hover { background: #333f4a; color: #fff; }
+button:focus-visible { outline: 2px solid #b6f9ee; outline-offset: 2px; }
+button:disabled { opacity: 0.45; cursor: default; }
+button[data-active="true"] {
+    border-color: #73d9cb;
+    background: linear-gradient(150deg, #285d60, #21444f);
+    color: #d5fff7;
+    box-shadow: inset 0 1px 0 #ffffff18;
 }
 
 .buttonBig {
@@ -169,75 +205,238 @@ td {
     font-family:monospace;
 }
 
-#buttonPlay {
-    font-size: 16px;
-    min-width: 48px;
-    min-height: 48px;
-}
+#buttonPlay { min-width: 86px; min-height: 40px; }
+.simulation-actions { display: flex; flex-wrap: wrap; align-items: stretch; gap: 7px; margin: 10px 0; }
+.simulation-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; }
+#buttonMinimize { flex: 1; }
+.simulation-actions svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
 
 
-/* landscape */
-@media (min-aspect-ratio: 6 / 5) {
+/* Compact displays stack the scene above a responsive control grid. */
+#main { display: flex; flex-direction: column; gap: 10px; }
+.render { float: none; width: 100%; height: min(65dvh, 90vw); }
+.control { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 8px; justify-content: start; }
+.control-column { display: contents; }
+.control-column[hidden] { display: none; }
+.control .element { min-width: 0; box-sizing: border-box; }
+.control fieldset { min-inline-size: 0; }
+
+/* Independent columns keep fieldsets whole and leave the remaining width to WebGL. */
+@media (min-width: 900px) {
+    #main {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
+        align-items: start;
+        height: calc(100dvh - 16px);
+    }
     .control {
-	margin-left: 10px;
-	max-width: 280px;
-	flex-direction: column;
+        grid-column: 1;
+        grid-row: 1;
+        grid-template-columns: repeat(var(--control-columns, 1), 280px);
+        grid-template-rows: minmax(0, 1fr);
+        height: 100%;
+        min-height: 0;
     }
-
-    .render {
-	width: 90vh;
-	height: 90vh;
-	display: inline;
+    .control-column {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 0;
+        height: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+        scrollbar-color: #596b76 #20252b;
     }
-
-    th {
-	width: 120px;
-    }
+    .control-column > .element { flex: 0 0 auto; }
+    .render { grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; width: 100%; height: 100%; }
+    th { width: 120px; }
 }
 
-/* portrait for phone */
-@media (max-aspect-ratio: 6 / 5) and (max-width: 400px) {
-    .control {
-	margin-top: 10px;
-	width: 90vw;
-	flex-direction: row;
-	flex-wrap: wrap;
-    }
-
-    .render {
-	width: 90vw;
-	height: 90vw;
-	display: block;
-    }
-
-    .element {
-        min-width: 120px;
-        max-width: 160px;
-    }
-
-    #header {
-	font-size: 14px;
-    }
-
+.interaction-panel label {
+    display: block;
+    margin: 6px 0;
 }
-/* portrait for larger displays */
-@media (max-aspect-ratio: 6 / 5) and (min-width: 400px) {
-    .control {
-	margin-top: 10px;
-	width: 90vw;
-	flex-direction: row;
-	flex-wrap: wrap;
-    }
 
-    .render {
-	width: 90vw;
-	height: 90vw;
-	display: block;
-    }
-
-    .element {
-        min-width: 160px;
-        max-width: 220px;
-    }
-
+#canvas3d.view-mode {
+    cursor: grab;
+    touch-action: none;
 }
+
+#canvas3d.view-mode.rotating {
+    cursor: grabbing;
+}
+
+/* Mode buttons: the pressed state communicates the current drag behavior. */
+.mode-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    padding: 4px;
+    border: 1px solid #4b535c;
+    border-radius: 12px;
+    background: #20252b;
+}
+
+.mode-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-width: 0;
+    min-height: 72px;
+    padding: 10px 4px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: #b8c3cf;
+    font: 600 11px/1.3 system-ui, sans-serif;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.mode-button svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.mode-button:hover {
+    background: #333f4a;
+    color: #fff;
+}
+
+.mode-button[aria-pressed="true"] {
+    border-color: #73d9cb;
+    background: linear-gradient(150deg, #285d60, #21444f);
+    color: #d5fff7;
+    box-shadow: inset 0 1px 0 #ffffff18, 0 2px 5px #0003;
+}
+
+.mode-button:focus-visible {
+    outline: 2px solid #b6f9ee;
+    outline-offset: 2px;
+}
+
+#interactionHelp {
+    min-height: 3.8em;
+    margin: 10px 2px;
+    color: #c2ccd4;
+    line-height: 1.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mode-button { transition: none; }
+}
+
+#canvas3d.view-mode.zooming {
+    cursor: ns-resize;
+}
+
+.steps-control {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #59616a;
+}
+
+.steps-heading, .steps-readout {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.steps-heading > label:first-child { font-weight: bold; }
+#stepsPerFrame { width: 100%; margin: 8px 0; accent-color: #73d9cb; }
+#stepsPerFrame:disabled { opacity: 0.45; }
+#stepsValue { color: #d5fff7; font-weight: bold; }
+#stepsHelp { margin: 7px 0 0; color: #c2ccd4; line-height: 1.4; }
+
+.view-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.view-actions button { min-height: 30px; padding: 5px 8px; }
+.view-center-status { margin-top: 6px; color: #c2ccd4; line-height: 1.4; }
+.view-center-status:empty { display: none; }
+
+
+.toggle-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 6px 10px;
+    border: 1px solid #59616a;
+    border-radius: 7px;
+    background: #20252b;
+    color: #c2ccd4;
+    font: 600 11px/1.3 system-ui, sans-serif;
+    cursor: pointer;
+}
+.toggle-button:hover { background: #333f4a; color: #fff; }
+.toggle-button[aria-pressed="true"] {
+    border-color: #73d9cb;
+    background: linear-gradient(150deg, #285d60, #21444f);
+    color: #d5fff7;
+    box-shadow: inset 0 1px 0 #ffffff18;
+}
+.toggle-button:focus-visible { outline: 2px solid #b6f9ee; outline-offset: 2px; }
+.toggle-button .toggle-state { font-size: 10px; opacity: 0.85; }
+.simulation-options { display: grid; gap: 8px; margin: 12px 0 4px; }
+.simulation-options > .toggle-button { justify-self: start; }
+.thermostat-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.thermostat-controls label { display: inline-flex; align-items: center; gap: 5px; }
+
+.picker-search-label { display: block; text-align: left; margin: 3px 0 6px; color: #c2ccd4; }
+#moleculeSearch {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 34px;
+    padding: 7px 9px;
+    border: 1px solid #59616a;
+    border-radius: 7px;
+    background: #20252b;
+    color: #e4edf5;
+    font: 12px system-ui, sans-serif;
+}
+#moleculeSearch::placeholder { color: #9aaab8; }
+.molecule-picker {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    max-height: 232px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin-top: 9px;
+    padding: 3px;
+    scrollbar-color: #596b76 #20252b;
+}
+.molecule-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 8px 4px;
+    border: 1px solid #47545e;
+    border-radius: 8px;
+    background: #20252b;
+    color: #c2ccd4;
+    font: 500 11px/1.3 system-ui, sans-serif;
+    cursor: pointer;
+}
+.molecule-option[hidden], .picker-empty[hidden] { display: none; }
+.molecule-option canvas { width: 64px; max-width: 100%; height: 56px; border-radius: 5px; }
+.molecule-option span { min-height: 2.6em; overflow-wrap: anywhere; }
+.molecule-option:hover { background: #333f4a; color: #fff; }
+.molecule-option:focus-visible, #moleculeSearch:focus-visible { outline: 2px solid #b6f9ee; outline-offset: 1px; }
+.picker-empty { color: #c2ccd4; line-height: 1.4; padding: 8px; }
+
+.picker-hint { margin: 7px 0 0; color: #c2ccd4; line-height: 1.4; text-align: left; }
+
+.status-panel #status { margin: 5px 0; line-height: 1.5; overflow-wrap: anywhere; }

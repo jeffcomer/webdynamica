@@ -35,6 +35,14 @@
       a:hover {color: #fcfc0c}  
       a:active {color: #c0f0fc}
 
+      .example-links p + p {
+          margin-block-start: 6px;
+      }
+
+      .example-links p:not(:last-child) {
+          margin-block-end: 6px;
+      }
+
       .caption {
 	  font-size: 18px;
       }
@@ -44,21 +52,23 @@
   <body>
     <h2>WebDynamica</h2>
 
-    <img src="figure_webdynamica5_sm.jpg" style="max-width: 900px; width: 90%;"></img>
+    <img src="figure_webdynamica_2026c.jpg" style="max-width: 900px; width: 90%;"></img>
     
 
     <h3>Examples</h3>
-    <p><a href="modules/beach.html">Exploring a beach at the atomic level</a></p>
-    <p><a href="graphene.html">Aromatic molecules on graphene</a></p>
-    <p><a href="modules/oil_and_water.html">Separation of oil and water</a></p>
-    <p><a href="modules/peptide.html">Self-assembly of cyclic peptides on graphene</a></p>
-    <p><a href="modules/hydration_shell.html">Observe hydration shells around ions and molecules</a></p>
-    <p><a href="modules/partition.html">See partitioning between water and organic phases</a></p>
-
+    <div class="example-links">
+      <p><a href="modules/beach.html">Exploring a beach at the atomic level</a></p>
+      <p><a href="modules/molecule.html">Just one molecule</a></p>
+      <p><a href="graphene.html">Aromatic molecules on graphene surface</a></p>
+      <p><a href="modules/peptide.html">Self-assembly of cyclic peptides on graphene</a></p>
+      <p><a href="modules/oil_and_water.html">Separation of oil and water</a></p>
+      <p><a href="modules/hydration_shell.html">Observe hydration shells around ions and molecules</a></p>
+      <p><a href="modules/partition.html">See partitioning between water and organic phases</a></p>
+    </div>
 
     
-    <p>&nbsp;</p>
-    <p class="caption"><a href="https://github.com/jeffcomer/webdynamica">On GitHub</a></p>
+    <!-- <p>&nbsp;</p> -->
+    <p class="caption"><a href="https://github.com/jeffcomer/webdynamica"><b>On GitHub</b></a></p>
 
     
   </body>
